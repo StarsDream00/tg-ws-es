@@ -187,7 +187,7 @@ Task.Run(() =>
 // 控制台命令
 while (true)
 {
-    string input = Console.ReadLine();
+    string input = Console.ReadLine() ?? "";
     if (input.StartsWith("unload "))
     {
         try

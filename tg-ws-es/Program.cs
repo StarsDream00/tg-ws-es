@@ -260,7 +260,15 @@ int LoadPlugins()
                 {
                     Logger.Trace($"{language["estg.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
                 }
-            },// WIP
+            },
+            ["listPlugins"] = () =>
+            {
+                return engines.Keys;
+            },
+            ["eval"] = (string code) =>
+            {
+                es.Execute(code);
+            }// WIP
 
         });
         es.SetValue("tg", new Dictionary<string, object>

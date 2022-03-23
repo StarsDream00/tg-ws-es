@@ -67,16 +67,17 @@ aes.Key = key;
 // 语言包
 Dictionary<string, string> language = new()
 {
-    ["estg.websocket.connected"] = "已连接到ws://%wsaddr%%endpoint%",
-    ["estg.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重试",
-    ["estg.telegram.connected"] = "已连接到Telegram服务器",
-    ["estg.telegram.connectionfailed"] = "连接到Telegram服务器失败，将在5秒后重试",
-    ["estg.plugin.loaded"] = "%name%已加载",
-    ["estg.plugin.loadfailed"] = "%name%加载失败",
-    ["estg.plugin.loadfinish"] = "已加载%count%个插件",
-    ["estg.plugin.unloaded"] = "%name%已卸载",
-    ["estg.plugin.unloadfailed"] = "%name%卸载失败",
-    ["estg.plugin.apierror"] = "%name%抛出了异常"
+    ["twe.websocket.connected"] = "已连接到ws://%wsaddr%%endpoint%",
+    ["twe.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重试",
+    ["twe.websocket.receivefailed"] = "接收WS包失败",
+    ["twe.telegram.connected"] = "已连接到Telegram服务器",
+    ["twe.telegram.connectionfailed"] = "连接到Telegram服务器失败，将在5秒后重试",
+    ["twe.plugin.loaded"] = "%name%已加载",
+    ["twe.plugin.loadfailed"] = "%name%加载失败",
+    ["twe.plugin.loadfinish"] = "已加载%count%个插件",
+    ["twe.plugin.unloaded"] = "%name%已卸载",
+    ["twe.plugin.unloadfailed"] = "%name%卸载失败",
+    ["twe.plugin.apierror"] = "%name%抛出了异常"
 
 };
 if (!Directory.Exists("language"))
@@ -109,12 +110,12 @@ while (true)
     {
         ws = new();
         ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), _cancellationToken).Wait();
-        Logger.Trace(language["estg.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
+        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
         break;
     }
     catch (Exception ex)
     {
-        Logger.Trace($"{language["estg.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：：{ex}", Logger.LogLevel.WARN);
+        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：：{ex}", Logger.LogLevel.WARN);
         Thread.Sleep(5000);
     }
 }
@@ -130,12 +131,12 @@ while (true)
             Proxy = new WebProxy(config.proxyaddr, true)
         }));
         botClient.TestApiAsync().Wait();
-        Logger.Trace(language["estg.telegram.connected"]);
+        Logger.Trace(language["twe.telegram.connected"]);
         break;
     }
     catch (Exception ex)
     {
-        Logger.Trace($"{language["estg.telegram.connectionfailed"]}：{ex}", Logger.LogLevel.WARN);
+        Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{ex}", Logger.LogLevel.WARN);
         Thread.Sleep(5000);
     }
 }
@@ -155,7 +156,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
     Logger.Trace($"{exception}", Logger.LogLevel.WARN);
 });
 
-Logger.Trace(language["estg.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
+Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
 
 // WebSocket监听
 Task.Run(() =>
@@ -169,17 +170,26 @@ Task.Run(() =>
             string dataStr = Encoding.UTF8.GetString(buffer);
             Pack pack = JsonConvert.DeserializeObject<Pack>(dataStr);
             Data data = JsonConvert.DeserializeObject<Data>(Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), iv)));
-            if (listenerFunc.ContainsKey($"mc.{data.cause}"))
+            switch (data.cause)
             {
-                foreach (Action<Dictionary<string, object>> func in listenerFunc[$"mc.{data.cause}"])
-                {
-                    func(data.@params);
-                }
+                case "decodefailed":
+                    throw new CryptographicException($"{data.@params["msg"]}");
+                case "invalidrequest":
+                    throw new InvalidDataException($"{data.@params["msg"]}");
+                default:
+                    if (listenerFunc.ContainsKey($"mc.{data.cause}"))
+                    {
+                        foreach (Action<Dictionary<string, object>> func in listenerFunc[$"mc.{data.cause}"])
+                        {
+                            func(data.@params);
+                        }
+                    }
+                    break;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
+            Logger.Trace($"{language["twe.telegram.receivefailed"]}：{ex}", Logger.LogLevel.ERROR);
         }
     }
 });
@@ -194,11 +204,11 @@ while (true)
         {
             engines.Remove(input[7..]);
             GC.SuppressFinalize(engines[input[7..]]);
-            Logger.Trace(language["estg.plugin.unloaded"].Replace("%name%", $"{input[7..]}"));
+            Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{input[7..]}"));
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["estg.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{ex}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{ex}", Logger.LogLevel.WARN);
         }
     }
     else
@@ -213,7 +223,7 @@ while (true)
                 engines.Clear();
                 listenerFunc.Clear();
                 exportFunc.Clear();
-                Logger.Trace(language["estg.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
+                Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
                 break;
         }
     }
@@ -225,7 +235,7 @@ int LoadPlugins()
     foreach (FileInfo file in new DirectoryInfo("plugins").GetFiles("*.js"))
     {
         Engine es = new();
-        es.SetValue("estg", new Dictionary<string, object>
+        es.SetValue("twe", new Dictionary<string, object>
         {
             ["listen"] = (string type, Action<object> func) =>
             {
@@ -247,7 +257,7 @@ int LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["estg.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
                 }
             },
             ["import"] = (string name) =>
@@ -258,7 +268,7 @@ int LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["estg.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
                 }
             },
             ["listPlugins"] = () =>
@@ -299,11 +309,11 @@ int LoadPlugins()
         {
             es.Execute(File.ReadAllText(file.FullName));
             engines.Add(file.Name, es);
-            Logger.Trace(language["estg.plugin.loaded"].Replace("%name%", $"{file.Name}"));
+            Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", $"{file.Name}"));
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["estg.plugin.loadfailed"].Replace("%name%", $"{file.Name}")}：{ex}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{file.Name}")}：{ex}", Logger.LogLevel.WARN);
             GC.SuppressFinalize(es);
         }
     }

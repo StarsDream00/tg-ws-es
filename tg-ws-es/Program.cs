@@ -280,9 +280,9 @@ int LoadPlugins()
         });
         es.SetValue("tg", new Dictionary<string, object>
         {
-            ["sendMessage"] = (long chatid, string msg, int type) =>
+            ["sendMessage"] = (long chatid, string msg, int? type) =>
             {
-                botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode)type);
+                botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type);
             },// WIP
         });
         es.SetValue("mc", new Dictionary<string, object>

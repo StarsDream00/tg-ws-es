@@ -12,9 +12,6 @@ using File = System.IO.File;
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = Encoding.UTF8;
 
-// 通用TaskToken
-CancellationToken _cancellationToken = new();
-
 // ES引擎字典
 Dictionary<string, Engine> engines = new();
 
@@ -109,7 +106,7 @@ while (true)
     try
     {
         ws = new();
-        ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), _cancellationToken).Wait();
+        ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
         Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
         break;
     }
@@ -153,7 +150,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
     }
 }, (botClient2, exception, cancellationToken) =>
 {
-    Logger.Trace($"{exception}", Logger.LogLevel.WARN);
+    Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{exception}", Logger.LogLevel.ERROR);
 });
 
 Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
@@ -166,7 +163,7 @@ Task.Run(() =>
     {
         try
         {
-            ws.ReceiveAsync(buffer, _cancellationToken).Wait();
+            ws.ReceiveAsync(buffer, default).Wait();
             string dataStr = Encoding.UTF8.GetString(buffer);
             Pack pack = JsonConvert.DeserializeObject<Pack>(dataStr);
             Data data = JsonConvert.DeserializeObject<Data>(Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), iv)));
@@ -283,9 +280,9 @@ int LoadPlugins()
         });
         es.SetValue("tg", new Dictionary<string, object>
         {
-            ["sendMessage"] = (long chatid, string msg) =>
+            ["sendMessage"] = (long chatid, string msg, int type) =>
             {
-                botClient.SendTextMessageAsync(chatid, msg);
+                botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode)type);
             },// WIP
         });
         es.SetValue("mc", new Dictionary<string, object>
@@ -331,7 +328,7 @@ async void sendPack(SendData input)
             mode = config.encrypt,
             raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(input)), iv)),
         }
-    }))), WebSocketMessageType.Text, WebSocketMessageFlags.None, _cancellationToken);
+    }))), WebSocketMessageType.Text, WebSocketMessageFlags.None, default);
 }
 
 public struct Config

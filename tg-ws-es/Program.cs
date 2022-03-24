@@ -33,7 +33,8 @@ Config config = new()
     wspasswd = "passwd",
     token = "YOUR_ACCESS_TOKEN_HERE",
     proxyaddr = "",
-    language = "zh_Hans"
+    language = "zh_Hans",
+    debugmode = false
 };
 if (!File.Exists("config.json"))
 {
@@ -75,7 +76,6 @@ Dictionary<string, string> language = new()
     ["twe.plugin.unloaded"] = "%name%已卸载",
     ["twe.plugin.unloadfailed"] = "%name%卸载失败",
     ["twe.plugin.apierror"] = "%name%抛出了异常"
-
 };
 if (!Directory.Exists("language"))
 {
@@ -164,9 +164,18 @@ Task.Run(() =>
         try
         {
             ws.ReceiveAsync(buffer, default).Wait();
-            string dataStr = Encoding.UTF8.GetString(buffer);
-            Pack pack = JsonConvert.DeserializeObject<Pack>(dataStr);
-            Data data = JsonConvert.DeserializeObject<Data>(Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), iv)));
+            string packStr = Encoding.UTF8.GetString(buffer);
+            if (config.debugmode)
+            {
+                Logger.Trace(packStr, Logger.LogLevel.DEBUG);
+            }
+            Pack pack = JsonConvert.DeserializeObject<Pack>(packStr);
+            string dataStr = Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), iv));
+            if (config.debugmode)
+            {
+                Logger.Trace(dataStr, Logger.LogLevel.DEBUG);
+            }
+            Data data = JsonConvert.DeserializeObject<Data>(dataStr);
             switch (data.cause)
             {
                 case "decodefailed":
@@ -174,9 +183,9 @@ Task.Run(() =>
                 case "invalidrequest":
                     throw new InvalidDataException($"{data.@params["msg"]}");
                 default:
-                    if (listenerFunc.ContainsKey($"mc.{data.cause}"))
+                    if (listenerFunc.ContainsKey($"ws.{data.cause}"))
                     {
-                        foreach (Action<Dictionary<string, object>> func in listenerFunc[$"mc.{data.cause}"])
+                        foreach (Action<Dictionary<string, object>> func in listenerFunc[$"ws.{data.cause}"])
                         {
                             func(data.@params);
                         }
@@ -285,6 +294,18 @@ int LoadPlugins()
                 botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type);
             },// WIP
         });
+        es.SetValue("ws", new Dictionary<string, object>    // 为MC准备的方便API
+        {
+            ["sendPack"] = (string type, string action, Dictionary<string, object> @params) =>
+            {
+                sendPack(new SendData
+                {
+                    type = type,
+                    action = action,
+                    @params = @params
+                });
+            },// WIP
+        });
         es.SetValue("mc", new Dictionary<string, object>
         {
             ["runcmd"] = (string cmd) =>
@@ -318,9 +339,9 @@ int LoadPlugins()
 }
 
 // 发WS包
-async void sendPack(SendData input)
+void sendPack(SendData input)
 {
-    await ws.SendAsync(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject((new Pack
+    ws.SendAsync(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new Pack
     {
         type = "encrypted",
         @params = new Pack.ParamsData
@@ -328,41 +349,5 @@ async void sendPack(SendData input)
             mode = config.encrypt,
             raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(input)), iv)),
         }
-    }))), WebSocketMessageType.Text, WebSocketMessageFlags.None, default);
-}
-
-public struct Config
-{
-    public string wsaddr { get; set; }
-    public string endpoint { get; set; }
-    public string encrypt { get; set; }
-    public string wspasswd { get; set; }
-    public string token { get; set; }
-    public string proxyaddr { get; set; }
-    public string language { get; set; }
-}
-
-public struct Pack
-{
-    public struct ParamsData
-    {
-        public string mode { get; set; }
-        public string raw { get; set; }
-    }
-    public string type { get; set; }
-    public ParamsData @params { get; set; }
-}
-
-public struct Data
-{
-    public string type { get; set; }
-    public string cause { get; set; }
-    public Dictionary<string, object> @params { get; set; }
-}
-
-public struct SendData
-{
-    public string type { get; set; }
-    public string action { get; set; }
-    public Dictionary<string, object> @params { get; set; }
+    })), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
 }

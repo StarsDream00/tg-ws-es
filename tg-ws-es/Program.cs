@@ -327,7 +327,8 @@ int LoadPlugins()
             ["sendMessage"] = (long chatid, string msg, int? type) =>
             {
                 botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type);
-            },// WIP
+            },
+            ["bot"] = botClient.GetMeAsync().Result// WIP
         });
         es.SetValue("ws", new Dictionary<string, object>
         {

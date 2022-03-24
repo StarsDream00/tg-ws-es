@@ -1,6 +1,6 @@
 twe.registerPlugin("Test", "测试用插件", [1, 0, 1]);
 
-let chatId = -1001621992011;
+let chatId = 0;
 
 twe.listen("ws.chat", (data) => {
     tg.sendMessage(chatId, `<${data.sender}> ${data.text}`);

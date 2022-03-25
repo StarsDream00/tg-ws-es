@@ -405,11 +405,11 @@ int LoadPlugins()
         {
             es.Execute(File.ReadAllText(file.FullName));
             engines.Add(pluginName, new KeyValuePair<Engine, PluginInfo>(es, info));
-            Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", $"{file.Name}"));
+            Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", $"{pluginName}"));
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{pluginName}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
             GC.SuppressFinalize(es);
         }
     }

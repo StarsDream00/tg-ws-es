@@ -23,7 +23,6 @@ public class Logger
         string? assemblyName = Assembly.GetCallingAssembly().GetName().Name;
         if (logType != LogType.OnlyLogFile)
         {
-            ConsoleColor consoleColor = Console.ForegroundColor;
             switch (logLevel)
             {
                 case LogLevel.WARN:
@@ -37,7 +36,7 @@ public class Logger
                     break;
             }
             Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss:fff} {logLevel}] [{assemblyName} - {methodName}] {message}");
-            Console.ForegroundColor = consoleColor;
+            Console.ResetColor();
         }
         if (logType != LogType.OnlyConsole)
         {

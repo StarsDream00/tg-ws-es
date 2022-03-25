@@ -20,11 +20,11 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore --configuration Release
     - name: Test
       run: dotnet test --no-build --verbosity normal
     - name: Upload build artifacts
       uses: actions/upload-artifact@main
       with:
         name: artifact
-        path: D:\a\tg-ws-es\tg-ws-es\bin\Release\net6.0
+        path: D:\a\tg-ws-es\tg-ws-es\tg-ws-es\bin\Release\net6.0

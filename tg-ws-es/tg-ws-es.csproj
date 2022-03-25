@@ -18,10 +18,4 @@
     <PackageReference Include="Telegram.Bot.Extensions.Polling" Version="1.0.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="SourceLand.Utils">
-      <HintPath>..\lib\SourceLand.Utils.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
 </Project>

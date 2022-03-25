@@ -1,9 +1,9 @@
 ﻿using Jint;
-using System.Text.Json;
 using System.Net;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using File = System.IO.File;
@@ -20,9 +20,6 @@ Dictionary<string, List<Action<object>>> listenerFunc = new();
 
 // 共享方法字典
 Dictionary<string, object> exportFunc = new();
-
-// 通用ID
-long id = 0;
 
 // 配置文件
 Config config = new()
@@ -73,12 +70,14 @@ Dictionary<string, string> language = new()
     ["twe.websocket.receivefailed"] = "接收WS包失败",
     ["twe.telegram.connected"] = "已连接到Telegram服务器",
     ["twe.telegram.connectionfailed"] = "连接到Telegram服务器失败，将在5秒后重试",
+    ["twe.telegram.receivefailed"] = "监听Telegram失败",
     ["twe.plugin.loaded"] = "%name%已加载",
     ["twe.plugin.loadfailed"] = "%name%加载失败",
     ["twe.plugin.loadfinish"] = "已加载%count%个插件",
     ["twe.plugin.unloaded"] = "%name%已卸载",
     ["twe.plugin.unloadfailed"] = "%name%卸载失败",
-    ["twe.plugin.apierror"] = "%name%抛出了异常"
+    ["twe.plugin.apierror"] = "%name%抛出了异常",
+    ["twe.plugin.listenerror"] = "%name%监听抛出了异常"
 };
 if (!Directory.Exists("language"))
 {
@@ -151,12 +150,19 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
     {
         foreach (Action<Update> func in listenerFunc[$"tg.{update.Type}"])
         {
-            func(update);
+            try
+            {
+                func(update);
+            }
+            catch (Exception ex)
+            {
+                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}")}：{ex}", Logger.LogLevel.ERROR);
+            }
         }
     }
 }, (botClient2, exception, cancellationToken) =>
 {
-    Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{exception}", Logger.LogLevel.ERROR);
+    Logger.Trace($"{language["twe.telegram.receivefailed"]}：{exception}", Logger.LogLevel.ERROR);
 });
 
 Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
@@ -193,7 +199,14 @@ Task.Run(() =>
                     {
                         foreach (Action<Dictionary<string, object>> func in listenerFunc[$"ws.{data.cause}"])
                         {
-                            func(data.@params);
+                            try
+                            {
+                                func(data.@params);
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}")}：{ex}", Logger.LogLevel.ERROR);
+                            }
                         }
                     }
                     break;
@@ -260,7 +273,7 @@ int LoadPlugins()
         {
             introduction = "",
             finename = file.Name,
-            version = new List<int>
+            version = new[]
             {
                 1,
                 0,
@@ -269,13 +282,10 @@ int LoadPlugins()
         };
         es.SetValue("twe", new Dictionary<string, object>
         {
-            ["registerPlugin"] = (string name, string introduction, List<int> version) => {
+            ["registerPlugin"] = (string name, string introduction, int[] version) =>
+            {
                 pluginName = name;
                 info.introduction = introduction;
-                if (version.Count != 3)
-                {
-                    Logger.Trace("version 不太对哦");
-                }
                 info.version = version;
             },
             ["listen"] = (string type, Action<object> func) =>
@@ -346,6 +356,7 @@ int LoadPlugins()
         {
             ["runcmd"] = (string cmd) =>
             {
+                int id = new Random().Next();
                 sendPack(new SendData
                 {
                     type = "pack",
@@ -353,7 +364,7 @@ int LoadPlugins()
                     @params = new Dictionary<string, object>
                     {
                         ["cmd"] = cmd,
-                        ["id"] = id++
+                        ["id"] = id
                     }
                 });
                 return id;

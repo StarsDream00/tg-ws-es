@@ -77,7 +77,8 @@ Dictionary<string, string> language = new()
     ["twe.plugin.unloaded"] = "%name%已卸载",
     ["twe.plugin.unloadfailed"] = "%name%卸载失败",
     ["twe.plugin.apierror"] = "%name%抛出了异常",
-    ["twe.plugin.listenerror"] = "%name%监听抛出了异常"
+    ["twe.plugin.listenerror"] = "%name%监听抛出了异常",
+    ["twe.command.doesntexist"] = "不存在的命令"
 };
 if (!Directory.Exists("language"))
 {
@@ -214,6 +215,24 @@ Task.Run(() =>
         }
         catch (Exception ex)
         {
+            if (ws.State != WebSocketState.Open)
+            {
+                while (true)
+                {
+                    try
+                    {
+                        ws = new();
+                        ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
+                        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
+                        break;
+                    }
+                    catch (Exception ex2)
+                    {
+                        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：：{ex2}", Logger.LogLevel.WARN);
+                        Thread.Sleep(5000);
+                    }
+                }
+            }
             Logger.Trace($"{language["twe.websocket.receivefailed"]}：{ex}", Logger.LogLevel.ERROR);
         }
     }
@@ -257,6 +276,9 @@ while (true)
                     Logger.Trace($"- {engine.Key} [{engine.Value.Value.version[0]}.{engine.Value.Value.version[1]}.{engine.Value.Value.version[2]}] ({engine.Value.Value.finename})");
                     Logger.Trace($"  {engine.Value.Value.introduction}");
                 }
+                break;
+            default:
+                Logger.Trace($"{language["twe.command.doesntexist"]}：{input}", Logger.LogLevel.WARN);
                 break;
         }
     }

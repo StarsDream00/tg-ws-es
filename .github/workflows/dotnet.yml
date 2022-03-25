@@ -23,3 +23,8 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@main
+      with:
+        name: artifact
+        path: D:\a\tg-ws-es\tg-ws-es\bin\Release\net6.0

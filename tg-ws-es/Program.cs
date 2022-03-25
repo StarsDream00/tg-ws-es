@@ -177,7 +177,7 @@ Task.Run(() =>
         try
         {
             ws.ReceiveAsync(buffer, default).Wait();
-            string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", "");
+            string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
             if (config.debugmode)
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
@@ -242,13 +242,13 @@ Task.Run(() =>
 // 控制台命令
 while (true)
 {
-    string input = Console.ReadLine() ?? "";
+    string input = Console.ReadLine() ?? string.Empty;
     if (input.StartsWith("unload "))
     {
         try
         {
-            engines.Remove(input[7..]);
             GC.SuppressFinalize(engines[input[7..]]);
+            engines.Remove(input[7..]);
             Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{input[7..]}"));
         }
         catch (Exception ex)
@@ -295,7 +295,7 @@ int LoadPlugins()
         string pluginName = file.Name;
         PluginInfo info = new()
         {
-            introduction = "",
+            introduction = string.Empty,
             finename = file.Name,
             version = new[]
             {

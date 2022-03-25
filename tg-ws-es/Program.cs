@@ -46,7 +46,7 @@ try
 }
 catch (Exception ex)
 {
-    Logger.Trace($"无法读取配置文件，已启用默认配置：{ex}", Logger.LogLevel.ERROR);
+    Logger.Trace($"无法读取配置文件，已启用默认配置：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
 }
 
 // 解析AES密钥&向量
@@ -97,7 +97,7 @@ try
 }
 catch (Exception ex)
 {
-    Logger.Trace($"无法读取语言文件，已启用中文：{ex}", Logger.LogLevel.ERROR);
+    Logger.Trace($"无法读取语言文件，已启用中文：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
 }
 
 if (!Directory.Exists("plugins"))
@@ -118,7 +118,7 @@ while (true)
     }
     catch (Exception ex)
     {
-        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：：{ex}", Logger.LogLevel.WARN);
+        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         Thread.Sleep(5000);
     }
 }
@@ -139,7 +139,7 @@ while (true)
     }
     catch (Exception ex)
     {
-        Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{ex}", Logger.LogLevel.WARN);
+        Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         Thread.Sleep(5000);
     }
 }
@@ -157,13 +157,13 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
             }
             catch (Exception ex)
             {
-                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}")}：{ex}", Logger.LogLevel.ERROR);
+                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
             }
         }
     }
 }, (botClient2, exception, cancellationToken) =>
 {
-    Logger.Trace($"{language["twe.telegram.receivefailed"]}：{exception}", Logger.LogLevel.ERROR);
+    Logger.Trace($"{language["twe.telegram.receivefailed"]}：{(config.debugmode ? exception : exception.Message)}", Logger.LogLevel.ERROR);
 });
 
 Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
@@ -206,7 +206,7 @@ Task.Run(() =>
                             }
                             catch (Exception ex)
                             {
-                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}")}：{ex}", Logger.LogLevel.ERROR);
+                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
                             }
                         }
                     }
@@ -215,25 +215,26 @@ Task.Run(() =>
         }
         catch (Exception ex)
         {
-            if (ws.State != WebSocketState.Open)
+            if (ws.State == WebSocketState.Open)
             {
-                while (true)
+                Logger.Trace($"{language["twe.websocket.receivefailed"]}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                return;
+            }
+            while (true)
+            {
+                try
                 {
-                    try
-                    {
-                        ws = new();
-                        ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
-                        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
-                        break;
-                    }
-                    catch (Exception ex2)
-                    {
-                        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：：{ex2}", Logger.LogLevel.WARN);
-                        Thread.Sleep(5000);
-                    }
+                    ws = new();
+                    ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
+                    Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
+                    break;
+                }
+                catch (Exception ex2)
+                {
+                    Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：{(config.debugmode ? ex2 : ex2.Message)}", Logger.LogLevel.WARN);
+                    Thread.Sleep(5000);
                 }
             }
-            Logger.Trace($"{language["twe.websocket.receivefailed"]}：{ex}", Logger.LogLevel.ERROR);
         }
     }
 });
@@ -252,7 +253,7 @@ while (true)
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{ex}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         }
     }
     else
@@ -260,9 +261,10 @@ while (true)
         switch (input)
         {
             case "reload":
-                foreach (KeyValuePair<Engine, PluginInfo> engine in engines.Values)
+                foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
                 {
-                    GC.SuppressFinalize(engine.Key);
+                    GC.SuppressFinalize(engine.Value.Key);
+                    Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
                 }
                 engines.Clear();
                 listenerFunc.Clear();
@@ -330,7 +332,7 @@ int LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["import"] = (string name) =>
@@ -341,7 +343,7 @@ int LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["listPlugins"] = () =>
@@ -364,7 +366,7 @@ int LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{ex.Message}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["bot"] = botClient.GetMeAsync().Result// WIP
@@ -407,7 +409,7 @@ int LoadPlugins()
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{file.Name}")}：{ex}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
             GC.SuppressFinalize(es);
         }
     }

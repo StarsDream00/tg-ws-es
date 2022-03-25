@@ -43,7 +43,11 @@ twe.listen("tg.Message", (data) => {
         let date = new Date();
         mc.runcmd(
             `say "[${date.getHours()}:${date.getMinutes()}][Telegram]<${
-                data.Message.From.LastName
+                data.Message.SenderChat
+                    ? data.Message.SenderChat.Title
+                    : data.Message.From.FirstName
+                    ? data.Message.From.FirstName + data.Message.From.LastName
+                    : data.Message.From.LastName
             }> ${data.Message.Text}"`
         );
     }

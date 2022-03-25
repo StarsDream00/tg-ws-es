@@ -3,14 +3,15 @@ twe.registerPlugin("Test", "测试用插件", [1, 0, 1]);
 let chatId = 0;
 
 let cache = [];
+let count = 0;
 twe.listen("ws.chat", (data) => {
     tg.sendMessage(chatId, `<${data.sender}> ${data.text}`);
 });
 twe.listen("ws.join", (data) => {
-    tg.sendMessage(chatId, `${data.sender} 加入了服务器`);
+    tg.sendMessage(chatId, `${data.sender} 加入了服务器 当前在线${++count}人`);
 });
 twe.listen("ws.left", (data) => {
-    tg.sendMessage(chatId, `${data.sender} 退出了服务器`);
+    tg.sendMessage(chatId, `${data.sender} 退出了服务器 当前在线${--count}人`);
 });
 twe.listen("ws.mobdie", (data) => {
     if (data.mobtype == "minecraft:player") {

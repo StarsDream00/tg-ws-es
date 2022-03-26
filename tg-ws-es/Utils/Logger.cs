@@ -17,7 +17,7 @@ public class Logger
         OnlyLogFile = 1,
         ConsoleWithLogFile = 2
     }
-    public static void Trace(object message, LogLevel logLevel = LogLevel.INFO, LogType logType = LogType.OnlyConsole, string logFilePath = "")
+    public static void Trace(object message, LogLevel? logLevel = LogLevel.INFO, LogType? logType = LogType.OnlyConsole, string? logFilePath = "")
     {
         string? methodName = new StackTrace().GetFrame(1)?.GetMethod()?.Name;
         string? assemblyName = Assembly.GetCallingAssembly().GetName().Name;

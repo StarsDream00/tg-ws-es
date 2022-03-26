@@ -67,6 +67,7 @@ Dictionary<string, string> language = new()
 {
     ["twe.websocket.connected"] = "已连接到ws://%wsaddr%%endpoint%",
     ["twe.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重试",
+    ["twe.websocket.connectionretry"] = "连接ws://%wsaddr%%endpoint%断开，将在5秒后重连",
     ["twe.websocket.receivefailed"] = "接收WS包失败",
     ["twe.telegram.connected"] = "已连接到Telegram服务器",
     ["twe.telegram.connectionfailed"] = "连接到Telegram服务器失败，将在5秒后重试",
@@ -78,6 +79,7 @@ Dictionary<string, string> language = new()
     ["twe.plugin.unloadfailed"] = "%name%卸载失败",
     ["twe.plugin.apierror"] = "%name%抛出了异常",
     ["twe.plugin.listenerror"] = "%name%监听抛出了异常",
+    ["twe.plugin.list"] = "插件列表",
     ["twe.command.doesntexist"] = "不存在的命令"
 };
 if (!Directory.Exists("language"))
@@ -183,6 +185,10 @@ Task.Run(() =>
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
             Pack pack = JsonSerializer.Deserialize<Pack>(packStr);
+            if (pack.@params.mode != config.encrypt)
+            {
+                throw new FormatException("加密方式不统一");
+            }
             string dataStr = Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), iv));
             if (config.debugmode)
             {
@@ -231,7 +237,7 @@ Task.Run(() =>
                 }
                 catch (Exception ex2)
                 {
-                    Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：{(config.debugmode ? ex2 : ex2.Message)}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.websocket.connectionretry"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：{(config.debugmode ? ex2 : ex2.Message)}", Logger.LogLevel.WARN);
                     Thread.Sleep(5000);
                 }
             }
@@ -272,10 +278,10 @@ while (true)
                 Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
                 break;
             case "list":
-                Logger.Trace($"插件列表 [{engines.Count}]");
+                Logger.Trace($"{language["twe.plugin.list"]} [{engines.Count}]");
                 foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
                 {
-                    Logger.Trace($"- {engine.Key} [{engine.Value.Value.version[0]}.{engine.Value.Value.version[1]}.{engine.Value.Value.version[2]}] ({engine.Value.Value.finename})");
+                    Logger.Trace($"- {engine.Key} [{engine.Value.Value.version[0]}.{engine.Value.Value.version[1]}.{engine.Value.Value.version[2]}] （{engine.Value.Value.finename}）");
                     Logger.Trace($"  {engine.Value.Value.introduction}");
                 }
                 break;
@@ -297,12 +303,7 @@ int LoadPlugins()
         {
             introduction = string.Empty,
             finename = file.Name,
-            version = new[]
-            {
-                1,
-                0,
-                0
-            }
+            version = new[] { 1, 0, 0 }
         };
         es.SetValue("twe", new Dictionary<string, object>
         {
@@ -320,9 +321,9 @@ int LoadPlugins()
                 }
                 listenerFunc[type].Add(func);
             },
-            ["log"] = (object message) =>
+            ["log"] = (object message, int? level, int? type, string? path) =>
             {
-                Logger.Trace($"{message}");
+                Logger.Trace(message, (Logger.LogLevel?)level, (Logger.LogType?)type, path);
             },
             ["export"] = (object func, string name) =>
             {

@@ -5,8 +5,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Telegram.Bot;
-using Telegram.Bot.Types;
-using File = System.IO.File;
 
 // 统一控制台输入输出代码页（UTF8），防止乱码
 Console.InputEncoding = Encoding.UTF8;
@@ -37,7 +35,7 @@ if (!File.Exists("config.json"))
 {
     File.WriteAllText("config.json", JsonSerializer.Serialize(config, new JsonSerializerOptions
     {
-        WriteIndented = true,
+        WriteIndented = true
     }));
 }
 try
@@ -54,7 +52,7 @@ StringBuilder sb = new();
 byte[] d = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(config.wspasswd));
 foreach (byte b in d)
 {
-    sb.Append($"{b:X2}");
+    _ = sb.Append($"{b:X2}");
 }
 string key_iv = $"{sb}";
 byte[] key = Encoding.UTF8.GetBytes(key_iv[..16]);
@@ -84,18 +82,18 @@ Dictionary<string, string> language = new()
 };
 if (!Directory.Exists("language"))
 {
-    Directory.CreateDirectory("language");
+    _ = Directory.CreateDirectory("language");
 }
 if (!File.Exists($"language\\zh_Hans.json"))
 {
     File.WriteAllText($"language\\zh_Hans.json", JsonSerializer.Serialize(language, new JsonSerializerOptions
     {
-        WriteIndented = true,
+        WriteIndented = true
     }));
 }
 try
 {
-    language = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText($"language\\{config.language}.json"));
+    language = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText($"language\\{config.language}.json")) ?? language;
 }
 catch (Exception ex)
 {
@@ -104,7 +102,7 @@ catch (Exception ex)
 
 if (!Directory.Exists("plugins"))
 {
-    Directory.CreateDirectory("plugins");
+    _ = Directory.CreateDirectory("plugins");
 }
 
 // WebSocket连接
@@ -168,7 +166,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
     Logger.Trace($"{language["twe.telegram.receivefailed"]}：{(config.debugmode ? exception : exception.Message)}", Logger.LogLevel.ERROR);
 });
 
-Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
+LoadPlugins();
 
 // WebSocket监听
 Task.Run(() =>
@@ -254,7 +252,7 @@ while (true)
         try
         {
             GC.SuppressFinalize(engines[input[7..]]);
-            engines.Remove(input[7..]);
+            _ = engines.Remove(input[7..]);
             Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{input[7..]}"));
         }
         catch (Exception ex)
@@ -275,7 +273,7 @@ while (true)
                 engines.Clear();
                 listenerFunc.Clear();
                 exportFunc.Clear();
-                Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{LoadPlugins()}"));
+                LoadPlugins();
                 break;
             case "list":
                 Logger.Trace($"{language["twe.plugin.list"]} [{engines.Count}]");
@@ -286,14 +284,14 @@ while (true)
                 }
                 break;
             default:
-                Logger.Trace($"{language["twe.command.doesntexist"]}：{input}", Logger.LogLevel.WARN);
+                Logger.Trace($"{language["twe.command.doesntexist"]}：{input.Split(" ")[0]}", Logger.LogLevel.WARN);
                 break;
         }
     }
 }
 
 // 加载ES插件
-int LoadPlugins()
+void LoadPlugins()
 {
     foreach (FileInfo file in new DirectoryInfo("plugins").GetFiles("*.js"))
     {
@@ -305,7 +303,7 @@ int LoadPlugins()
             finename = file.Name,
             version = new[] { 1, 0, 0 }
         };
-        es.SetValue("twe", new Dictionary<string, object>
+        _ = es.SetValue("twe", new Dictionary<string, object>
         {
             ["registerPlugin"] = (string name, string introduction, int[] version) =>
             {
@@ -323,7 +321,7 @@ int LoadPlugins()
             },
             ["log"] = (object message, int? level, int? type, string? path) =>
             {
-                Logger.Trace(message, (Logger.LogLevel?)level, (Logger.LogType?)type, path);
+                Logger.Trace(message, level == null ? Logger.LogLevel.INFO : (Logger.LogLevel)level, type == null ? Logger.LogType.OnlyConsole : (Logger.LogType)type, path);
             },
             ["export"] = (object func, string name) =>
             {
@@ -340,7 +338,7 @@ int LoadPlugins()
             {
                 try
                 {
-                    es.SetValue(name, exportFunc[name]);
+                    _ = es.SetValue(name, exportFunc[name]);
                 }
                 catch (Exception ex)
                 {
@@ -353,10 +351,10 @@ int LoadPlugins()
             },
             ["eval"] = (string code) =>
             {
-                es.Execute(code);
+                _ = es.Execute(code);
             }// WIP
         });
-        es.SetValue("tg", new Dictionary<string, object>
+        _ = es.SetValue("tg", new Dictionary<string, object>
         {
             ["sendMessage"] = (long chatid, string msg, int? type) =>
             {
@@ -371,7 +369,7 @@ int LoadPlugins()
             },
             ["bot"] = botClient.GetMeAsync().Result// WIP
         });
-        es.SetValue("ws", new Dictionary<string, object>
+        _ = es.SetValue("ws", new Dictionary<string, object>
         {
             ["sendPack"] = (string type, string action, Dictionary<string, object> @params) =>
             {
@@ -381,9 +379,9 @@ int LoadPlugins()
                     action = action,
                     @params = @params
                 });
-            },// WIP
+            }// WIP
         });
-        es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
+        _ = es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
         {
             ["runcmd"] = (string cmd) =>
             {
@@ -399,11 +397,11 @@ int LoadPlugins()
                     }
                 });
                 return id;
-            },// WIP
+            }// WIP
         });
         try
         {
-            es.Execute(File.ReadAllText(file.FullName));
+            _ = es.Execute(File.ReadAllText(file.FullName));
             engines.Add(pluginName, new KeyValuePair<Engine, PluginInfo>(es, info));
             Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", $"{pluginName}"));
         }
@@ -413,7 +411,7 @@ int LoadPlugins()
             GC.SuppressFinalize(es);
         }
     }
-    return engines.Count;
+    Logger.Trace(language["twe.plugin.loadfinish"].Replace("%count%", $"{engines.Count}"));
 }
 
 // 发WS包
@@ -425,7 +423,7 @@ void sendPack(SendData input)
         @params = new Pack.ParamsData
         {
             mode = config.encrypt,
-            raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input)), iv)),
+            raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input)), iv))
         }
     })), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
 }

@@ -16,7 +16,7 @@ Console.OutputEncoding = Encoding.UTF8;
 Dictionary<string, KeyValuePair<Engine, PluginInfo>> engines = new();
 
 // 监听方法字典
-Dictionary<string, List<Action<object>>> listenerFunc = new();
+Dictionary<string, List<KeyValuePair<string, Action<object>>>> listenerFunc = new();
 
 // 共享方法字典
 Dictionary<string, object> exportFunc = new();
@@ -78,7 +78,7 @@ Dictionary<string, string> language = new()
     ["twe.plugin.unloaded"] = "%name%已卸载",
     ["twe.plugin.unloadfailed"] = "%name%卸载失败",
     ["twe.plugin.apierror"] = "%name%抛出了异常",
-    ["twe.plugin.listenerror"] = "%name%监听抛出了异常",
+    ["twe.plugin.listenerror"] = "%name%监听（插件%plugin%）抛出了异常",
     ["twe.plugin.list"] = "插件列表",
     ["twe.command.doesntexist"] = "不存在的命令"
 };
@@ -151,15 +151,15 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
     if (listenerFunc.ContainsKey($"tg.{update.Type}"))
     {
-        foreach (Action<Update> func in listenerFunc[$"tg.{update.Type}"])
+        foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"tg.{update.Type}"])
         {
             try
             {
-                func(update);
+                func.Value(update);
             }
             catch (Exception ex)
             {
-                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
             }
         }
     }
@@ -204,15 +204,15 @@ Task.Run(() =>
                 default:
                     if (listenerFunc.ContainsKey($"ws.{data.cause}"))
                     {
-                        foreach (Action<Dictionary<string, object>> func in listenerFunc[$"ws.{data.cause}"])
+                        foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"ws.{data.cause}"])
                         {
                             try
                             {
-                                func(data.@params);
+                                func.Value(data.@params);
                             }
                             catch (Exception ex)
                             {
-                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}").Replace("%plugin%", func.Key)}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
                             }
                         }
                     }
@@ -319,7 +319,7 @@ int LoadPlugins()
                 {
                     listenerFunc[type] = new();
                 }
-                listenerFunc[type].Add(func);
+                listenerFunc[type].Add(new KeyValuePair<string, Action<object>>(pluginName, func));
             },
             ["log"] = (object message, int? level, int? type, string? path) =>
             {
@@ -355,7 +355,6 @@ int LoadPlugins()
             {
                 es.Execute(code);
             }// WIP
-
         });
         es.SetValue("tg", new Dictionary<string, object>
         {

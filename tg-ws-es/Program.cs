@@ -47,22 +47,10 @@ catch (Exception ex)
     Logger.Trace($"无法读取配置文件，已启用默认配置：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
 }
 
-// 解析AES密钥&向量
-StringBuilder sb = new();
-byte[] d = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(config.wspasswd));
-foreach (byte b in d)
-{
-    _ = sb.Append($"{b:X2}");
-}
-string key_iv = $"{sb}";
-byte[] key = Encoding.UTF8.GetBytes(key_iv[..16]);
-byte[] iv = Encoding.UTF8.GetBytes(key_iv[16..]);
-Aes aes = Aes.Create();
-aes.Key = key;
-
 // 语言包
 Dictionary<string, string> language = new()
 {
+    ["twe.encrypt.unsupport"] = "不支持的加密方式",
     ["twe.websocket.connected"] = "已连接到ws://%wsaddr%%endpoint%",
     ["twe.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重试",
     ["twe.websocket.connectionretry"] = "连接ws://%wsaddr%%endpoint%断开，将在5秒后重连",
@@ -105,6 +93,28 @@ if (!Directory.Exists("plugins"))
     _ = Directory.CreateDirectory("plugins");
 }
 
+// 解析AES密钥&向量
+Aes aes = Aes.Create();
+switch (config.encrypt)
+{
+    case "aes_cbc_pkcs7padding":
+        StringBuilder sb = new();
+        byte[] d = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(config.wspasswd));
+        foreach (byte b in d)
+        {
+            _ = sb.Append($"{b:X2}");
+        }
+        string key_iv = $"{sb}";
+        byte[] key = Encoding.UTF8.GetBytes(key_iv[..16]);
+        aes.IV = Encoding.UTF8.GetBytes(key_iv[16..]);
+        aes.Key = key;
+        break;
+    case "none":
+        break;
+    default:
+        throw new CryptographicException(language["twe.encrypt.unsupport"]);
+}
+
 // WebSocket连接
 ClientWebSocket ws;
 while (true)
@@ -144,6 +154,8 @@ while (true)
     }
 }
 
+LoadPlugins();
+
 // Telegram监听
 botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
@@ -166,8 +178,6 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
     Logger.Trace($"{language["twe.telegram.receivefailed"]}：{(config.debugmode ? exception : exception.Message)}", Logger.LogLevel.ERROR);
 });
 
-LoadPlugins();
-
 // WebSocket监听
 Task.Run(() =>
 {
@@ -182,17 +192,22 @@ Task.Run(() =>
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
-            Pack pack = JsonSerializer.Deserialize<Pack>(packStr);
-            if (pack.@params.mode != config.encrypt)
+            switch (config.encrypt)
             {
-                throw new FormatException("加密方式不统一");
+                case "aes_cbc_pkcs7padding":
+                    Pack pack = JsonSerializer.Deserialize<Pack>(packStr);
+                    if (pack.@params.mode != config.encrypt)
+                    {
+                        throw new FormatException("加密方式不统一");
+                    }
+                    packStr = Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), aes.IV));
+                    if (config.debugmode)
+                    {
+                        Logger.Trace(packStr, Logger.LogLevel.DEBUG);
+                    }
+                    break;
             }
-            string dataStr = Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), iv));
-            if (config.debugmode)
-            {
-                Logger.Trace(dataStr, Logger.LogLevel.DEBUG);
-            }
-            Data data = JsonSerializer.Deserialize<Data>(dataStr);
+            Data data = JsonSerializer.Deserialize<Data>(packStr);
             switch (data.cause)
             {
                 case "decodefailed":
@@ -290,7 +305,7 @@ while (true)
     }
 }
 
-// 加载ES插件
+// 加载插件
 void LoadPlugins()
 {
     foreach (FileInfo file in new DirectoryInfo("plugins").GetFiles("*.js"))
@@ -303,6 +318,7 @@ void LoadPlugins()
             finename = file.Name,
             version = new[] { 1, 0, 0 }
         };
+        // 注册API
         _ = es.SetValue("twe", new Dictionary<string, object>
         {
             ["registerPlugin"] = (string name, string introduction, int[] version) =>
@@ -423,7 +439,7 @@ void sendPack(SendData input)
         @params = new Pack.ParamsData
         {
             mode = config.encrypt,
-            raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input)), iv))
+            raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input)), aes.IV))
         }
     })), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
 }

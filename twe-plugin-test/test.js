@@ -1,4 +1,4 @@
-twe.registerPlugin("Test", "测试用插件", [1, 0, 1]);
+twe.registerPlugin("Test", "测试用插件", [1, 0, 0]);
 
 let chatId = 0; // 填你群组的ChatId
 
@@ -16,30 +16,31 @@ twe.listen("ws.join", (data) => {
 });
 twe.listen("ws.left", (data) => {
     let index = players.indexOf(String(data.sender));
-    if (index > -1) {
-        players.splice(index, 1);
-        tg.sendMessage(
-            chatId,
-            `${data.sender} 退出了服务器 当前在线${players.length}人`
-        );
+    if (index < 0) {
+        return;
     }
+    players.splice(index, 1);
+    tg.sendMessage(
+        chatId,
+        `${data.sender} 退出了服务器 当前在线${players.length}人`
+    );
 });
 twe.listen("ws.mobdie", (data) => {
     if (data.mobtype == "minecraft:player") {
         let type = "";
         switch (String(data.dmname)) {
             case "entity_attack":
-                type = `被${
+                type = `被 ${
                     String(data.srcname) ? data.srcname : data.srctype
-                }杀死了`;
+                } 杀死了`;
                 break;
             case "projectile":
                 type = "被射杀";
                 break;
             case "entity_explosion":
-                type = `被${
+                type = `被 ${
                     String(data.srcname) ? data.srcname : data.srctype
-                }炸死了`;
+                } 炸死了`;
                 break;
             case "drowning":
                 type = "淹死了";
@@ -70,9 +71,9 @@ twe.listen("ws.mobdie", (data) => {
                 type = "随着一声巨响消失了";
                 break;
             case "magic":
-                type = `被${
+                type = `被 ${
                     String(data.srcname) ? data.srcname : data.srctype
-                }使用的魔法杀死了`;
+                } 使用的魔法杀死了`;
                 break;
             case "anvil":
                 type = "被坠落的铁砧压扁了";
@@ -85,6 +86,18 @@ twe.listen("ws.mobdie", (data) => {
                 break;
             case "lightning":
                 type = "被闪电击中";
+                break;
+            case "suffocation":
+                type = "在墙里窒息而亡";
+                break;
+            case "block_explosion":
+                type = "爆炸了";
+                break;
+            case "stalactite":
+                type = "被坠落的钟乳石刺穿了";
+                break;
+            case "stalagmite":
+                type = "被钉在了石笋上";
                 break;
             default:
                 type = data.dmname;
@@ -109,9 +122,8 @@ twe.listen("tg.Message", (data) => {
             }
             return;
         }
-        let date = new Date();
         mc.runcmd(
-            `say "[${date.getHours()}:${date.getMinutes()}][Telegram]<${
+            `say "<${
                 data.Message.SenderChat
                     ? data.Message.SenderChat.Title
                     : data.Message.From.FirstName

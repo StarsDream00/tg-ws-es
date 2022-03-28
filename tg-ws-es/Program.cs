@@ -433,13 +433,20 @@ void LoadPlugins()
 // 发WS包
 void sendPack(SendData input)
 {
-    ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Pack
+    byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
+    switch (config.encrypt)
     {
-        type = "encrypted",
-        @params = new Pack.ParamsData
-        {
-            mode = config.encrypt,
-            raw = Convert.ToBase64String(aes.EncryptCbc(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input)), aes.IV))
-        }
-    })), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
+        case "aes_cbc_pkcs7padding":
+            pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Pack
+            {
+                type = "encrypted",
+                @params = new Pack.ParamsData
+                {
+                    mode = config.encrypt,
+                    raw = Convert.ToBase64String(aes.EncryptCbc(pack, aes.IV))
+                }
+            }));
+            break;
+    }
+    ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
 }

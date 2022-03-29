@@ -239,6 +239,14 @@ Task.Run(() =>
                 Logger.Trace($"{language["twe.websocket.receivefailed"]}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
                 return;
             }
+            foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
+            {
+                GC.SuppressFinalize(engine.Value.Key);
+                Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
+            }
+            engines.Clear();
+            listenerFunc.Clear();
+            exportFunc.Clear();
             while (true)
             {
                 try
@@ -246,6 +254,7 @@ Task.Run(() =>
                     ws = new();
                     ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
                     Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
+                    LoadPlugins();
                     break;
                 }
                 catch (Exception ex2)

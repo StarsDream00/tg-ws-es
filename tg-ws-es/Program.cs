@@ -317,8 +317,12 @@ while (true)
 // 加载插件
 void LoadPlugins()
 {
-    foreach (FileInfo file in new DirectoryInfo("plugins").GetFiles("*.js"))
+    foreach (FileInfo file in new DirectoryInfo("plugins").GetFiles())
     {
+        if (file.Extension != ".es" && file.Extension != ".js")
+        {
+            continue;
+        }
         Engine es = new();
         string pluginName = file.Name;
         PluginInfo info = new()

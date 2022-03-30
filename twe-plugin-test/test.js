@@ -123,13 +123,15 @@ twe.listen("tg.Message", (data) => {
             return;
         }
         mc.runcmd(
-            `say "<${
+            `tellraw @a {"rawtext":[{"text":"<${
                 data.Message.SenderChat
                     ? data.Message.SenderChat.Title
                     : data.Message.From.FirstName
                     ? data.Message.From.FirstName + data.Message.From.LastName
                     : data.Message.From.LastName
-            }> ${data.Message.Text}"`
+            }> ${
+                data.Message.Type == 1 ? data.Message.Text : "§o*胡言乱语*"
+            }"}]}`
         );
     }
 });

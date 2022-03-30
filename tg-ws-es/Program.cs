@@ -354,7 +354,7 @@ void LoadPlugins()
             },
             ["toString"] = (object str) =>
             {
-                return (string)str;
+                return $"{str}";
             },
             ["export"] = (object func, string name) =>
             {

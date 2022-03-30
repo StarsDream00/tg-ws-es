@@ -352,6 +352,10 @@ void LoadPlugins()
             {
                 Logger.Trace(message, level == null ? Logger.LogLevel.INFO : (Logger.LogLevel)level, type == null ? Logger.LogType.OnlyConsole : (Logger.LogType)type, path);
             },
+            ["toString"] = (object str) =>
+            {
+                return (string)str;
+            },
             ["export"] = (object func, string name) =>
             {
                 try

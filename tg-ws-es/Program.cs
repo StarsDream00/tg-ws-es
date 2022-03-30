@@ -383,13 +383,17 @@ void LoadPlugins()
         {
             ["sendMessage"] = (long chatid, string msg, int? type) =>
             {
-                try
+                while (true)
                 {
-                    botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type).Wait();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                    try
+                    {
+                        botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type).Wait();
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                    }
                 }
             },
             ["bot"] = botClient.GetMeAsync().Result// WIP

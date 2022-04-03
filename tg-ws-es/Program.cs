@@ -101,16 +101,32 @@ while (true)
     {
         ws = new();
         ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
-        ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase
+        long id = new Random().NextInt64();
+        ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
         {
             Action = "LoginRequest",
-            PacketId = new Random().NextInt64(),
+            PacketId = id,
             Params = new LoginRequest
             {
                 Password = config.Token
             }
         })), WebSocketMessageType.Text, true, default).Wait();
-        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
+        byte[] buffer = new byte[8192];
+        ws.ReceiveAsync(buffer, default).Wait();
+        string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
+        if (config.DebugMode)
+        {
+            Logger.Trace(packStr, Logger.LogLevel.DEBUG);
+        }
+        PacketBase<LoginResponse> data = JsonSerializer.Deserialize<PacketBase<LoginResponse>>(packStr);
+        if (data.Action == "LoginResponse" && data.PacketId == id && data.Params.Success && data.Params.Message == string.Empty)
+        {
+            Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
+        }
+        else
+        {
+            throw new Exception(data.Params.Message);
+        }
         break;
     }
     catch (Exception ex)
@@ -179,7 +195,7 @@ Task.Run(() =>
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
-            PacketBase data = JsonSerializer.Deserialize<PacketBase>(packStr);
+            PacketBase<object> data = JsonSerializer.Deserialize<PacketBase<object>>(packStr);
             if (listenerFunc.ContainsKey($"ws.{data.Action}"))
             {
                 foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"ws.{data.Action}"])
@@ -273,6 +289,9 @@ while (true)
                     Logger.Trace($"- {engine.Key} [{engine.Value.Value.version[0]}.{engine.Value.Value.version[1]}.{engine.Value.Value.version[2]}] （{engine.Value.Value.finename}）");
                     Logger.Trace($"  {engine.Value.Value.introduction}");
                 }
+                break;
+            case "stop":
+                Environment.Exit(1);
                 break;
             default:
                 Logger.Trace($"{language["twe.command.doesntexist"]}：{input.Split(" ")[0]}", Logger.LogLevel.WARN);
@@ -374,7 +393,7 @@ void LoadPlugins()
             ["sendPack"] = (string action, Dictionary<string, object> @params) =>
             {
                 long id = new Random().NextInt64();
-                sendPack(new PacketBase
+                sendPack(new PacketBase<object>
                 {
                     Action = action,
                     PacketId = id,
@@ -388,7 +407,7 @@ void LoadPlugins()
             ["runcmd"] = (string cmd) =>
             {
                 long id = new Random().NextInt64();
-                sendPack(new PacketBase
+                sendPack(new PacketBase<RuncmdRequest>
                 {
                     Action = "RuncmdRequest",
                     PacketId = id,
@@ -416,7 +435,7 @@ void LoadPlugins()
 }
 
 // 发WS包
-void sendPack(PacketBase input)
+void sendPack(object input)
 {
     byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
     ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();

@@ -1,8 +1,8 @@
-﻿public struct PacketBase
+﻿public struct PacketBase<T>
 {
     public string Action { get; set; }
     public long PacketId { get; set; }
-    public object Params { get; set; }
+    public T Params { get; set; }
 }
 public struct ResponseWithMessage
 {

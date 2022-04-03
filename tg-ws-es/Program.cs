@@ -1,7 +1,6 @@
 ﻿using Jint;
 using System.Net;
 using System.Net.WebSockets;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Telegram.Bot;
@@ -22,14 +21,16 @@ Dictionary<string, object> exportFunc = new();
 // 配置文件
 Config config = new()
 {
-    wsaddr = "127.0.0.1:8800",
-    endpoint = "/mc",
-    encrypt = "aes_cbc_pkcs7padding",
-    wspasswd = "passwd",
-    token = "YOUR_ACCESS_TOKEN_HERE",
-    proxyaddr = "",
-    language = "zh_Hans",
-    debugmode = false
+    ListenAddr = "127.0.0.1:8080",
+    Endpoint = "/ws",
+    Token = "",
+    UsingTLS = false,
+    CertFile = "cert.pem",
+    KeyFile = "key.pem",
+    BotToken = "YOUR_ACCESS_TOKEN_HERE",
+    ProxyAddr = "",
+    Language = "zh_Hans",
+    DebugMode = false
 };
 if (!File.Exists("config.json"))
 {
@@ -44,13 +45,12 @@ try
 }
 catch (Exception ex)
 {
-    Logger.Trace($"无法读取配置文件，已启用默认配置：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+    Logger.Trace($"无法读取配置文件，已启用默认配置：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
 }
 
 // 语言包
 Dictionary<string, string> language = new()
 {
-    ["twe.encrypt.unsupport"] = "不支持的加密方式",
     ["twe.websocket.connected"] = "已连接到ws://%wsaddr%%endpoint%",
     ["twe.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重试",
     ["twe.websocket.connectionretry"] = "连接ws://%wsaddr%%endpoint%断开，将在5秒后重连",
@@ -81,38 +81,16 @@ if (!File.Exists($"language\\zh_Hans.json"))
 }
 try
 {
-    language = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText($"language\\{config.language}.json")) ?? language;
+    language = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText($"language\\{config.Language}.json")) ?? language;
 }
 catch (Exception ex)
 {
-    Logger.Trace($"无法读取语言文件，已启用中文：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+    Logger.Trace($"无法读取语言文件，已启用中文：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
 }
 
 if (!Directory.Exists("plugins"))
 {
     _ = Directory.CreateDirectory("plugins");
-}
-
-// 解析AES密钥&向量
-Aes aes = Aes.Create();
-switch (config.encrypt)
-{
-    case "aes_cbc_pkcs7padding":
-        StringBuilder sb = new();
-        byte[] d = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(config.wspasswd));
-        foreach (byte b in d)
-        {
-            _ = sb.Append($"{b:X2}");
-        }
-        string key_iv = $"{sb}";
-        byte[] key = Encoding.UTF8.GetBytes(key_iv[..16]);
-        aes.IV = Encoding.UTF8.GetBytes(key_iv[16..]);
-        aes.Key = key;
-        break;
-    case "none":
-        break;
-    default:
-        throw new CryptographicException(language["twe.encrypt.unsupport"]);
 }
 
 // WebSocket连接
@@ -122,13 +100,22 @@ while (true)
     try
     {
         ws = new();
-        ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
-        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
+        ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
+        ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase
+        {
+            Action = "LoginRequest",
+            PacketId = new Random().NextInt64(),
+            Params = new LoginRequest
+            {
+                Password = config.Token
+            }
+        })), WebSocketMessageType.Text, true, default).Wait();
+        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
         break;
     }
     catch (Exception ex)
     {
-        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+        Logger.Trace($"{language["twe.websocket.connectionfailed"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         Thread.Sleep(5000);
     }
 }
@@ -139,9 +126,9 @@ while (true)
 {
     try
     {
-        botClient = new(config.token, string.IsNullOrWhiteSpace(config.proxyaddr) ? null : new HttpClient(new HttpClientHandler
+        botClient = new(config.BotToken, string.IsNullOrWhiteSpace(config.ProxyAddr) ? null : new HttpClient(new HttpClientHandler
         {
-            Proxy = new WebProxy(config.proxyaddr, true)
+            Proxy = new WebProxy(config.ProxyAddr, true)
         }));
         botClient.TestApiAsync().Wait();
         Logger.Trace(language["twe.telegram.connected"]);
@@ -149,7 +136,7 @@ while (true)
     }
     catch (Exception ex)
     {
-        Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+        Logger.Trace($"{language["twe.telegram.connectionfailed"]}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         Thread.Sleep(5000);
     }
 }
@@ -169,17 +156,17 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
             }
             catch (Exception ex)
             {
-                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
             }
         }
     }
 }, (botClient2, exception, cancellationToken) =>
 {
-    Logger.Trace($"{language["twe.telegram.receivefailed"]}：{(config.debugmode ? exception : exception.Message)}", Logger.LogLevel.ERROR);
+    Logger.Trace($"{language["twe.telegram.receivefailed"]}：{(config.DebugMode ? exception : exception.Message)}", Logger.LogLevel.ERROR);
 });
 
 // WebSocket监听
-Task.Run(() =>
+/*Task.Run(() =>
 {
     while (true)
     {
@@ -188,24 +175,9 @@ Task.Run(() =>
         {
             ws.ReceiveAsync(buffer, default).Wait();
             string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
-            if (config.debugmode)
+            if (config.DebugMode)
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
-            }
-            switch (config.encrypt)
-            {
-                case "aes_cbc_pkcs7padding":
-                    Pack pack = JsonSerializer.Deserialize<Pack>(packStr);
-                    if (pack.@params.mode != config.encrypt)
-                    {
-                        throw new FormatException("加密方式不统一");
-                    }
-                    packStr = Encoding.UTF8.GetString(aes.DecryptCbc(Convert.FromBase64String(pack.@params.raw), aes.IV));
-                    if (config.debugmode)
-                    {
-                        Logger.Trace(packStr, Logger.LogLevel.DEBUG);
-                    }
-                    break;
             }
             Data data = JsonSerializer.Deserialize<Data>(packStr);
             switch (data.cause)
@@ -225,7 +197,7 @@ Task.Run(() =>
                             }
                             catch (Exception ex)
                             {
-                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}").Replace("%plugin%", func.Key)}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
                             }
                         }
                     }
@@ -236,7 +208,7 @@ Task.Run(() =>
         {
             if (ws.State == WebSocketState.Open)
             {
-                Logger.Trace($"{language["twe.websocket.receivefailed"]}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                Logger.Trace($"{language["twe.websocket.receivefailed"]}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
                 return;
             }
             foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
@@ -252,20 +224,20 @@ Task.Run(() =>
                 try
                 {
                     ws = new();
-                    ws.ConnectAsync(new Uri($"ws://{config.wsaddr}{config.endpoint}"), default).Wait();
-                    Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint));
+                    ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
+                    Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
                     LoadPlugins();
                     break;
                 }
                 catch (Exception ex2)
                 {
-                    Logger.Trace($"{language["twe.websocket.connectionretry"].Replace("%wsaddr%", config.wsaddr).Replace("%endpoint%", config.endpoint)}：{(config.debugmode ? ex2 : ex2.Message)}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.websocket.connectionretry"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint)}：{(config.DebugMode ? ex2 : ex2.Message)}", Logger.LogLevel.WARN);
                     Thread.Sleep(5000);
                 }
             }
         }
     }
-});
+});*/
 
 // 控制台命令
 while (true)
@@ -281,7 +253,7 @@ while (true)
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         }
     }
     else
@@ -319,7 +291,7 @@ void LoadPlugins()
 {
     foreach (FileInfo file in new DirectoryInfo("plugins").GetFiles())
     {
-        if (file.Extension != ".es" && file.Extension != ".js")
+        if (file.Extension is not ".es" and not ".js")
         {
             continue;
         }
@@ -360,7 +332,7 @@ void LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["import"] = (string name) =>
@@ -371,7 +343,7 @@ void LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["listPlugins"] = () =>
@@ -396,7 +368,7 @@ void LoadPlugins()
                     }
                     catch (Exception ex)
                     {
-                        Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                        Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                     }
                 }
             },
@@ -404,29 +376,30 @@ void LoadPlugins()
         });
         _ = es.SetValue("ws", new Dictionary<string, object>
         {
-            ["sendPack"] = (string type, string action, Dictionary<string, object> @params) =>
+            ["sendPack"] = (string action, Dictionary<string, object> @params) =>
             {
-                sendPack(new SendData
+                long id = new Random().NextInt64();
+                sendPack(new PacketBase
                 {
-                    type = type,
-                    action = action,
-                    @params = @params
+                    Action = action,
+                    PacketId = id,
+                    Params = @params
                 });
+                return id;
             }// WIP
         });
         _ = es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
         {
             ["runcmd"] = (string cmd) =>
             {
-                int id = new Random().Next();
-                sendPack(new SendData
+                long id = new Random().NextInt64();
+                sendPack(new PacketBase
                 {
-                    type = "pack",
-                    action = "runcmdrequest",
-                    @params = new Dictionary<string, object>
+                    Action = "RuncmdRequest",
+                    PacketId = id,
+                    Params = new RuncmdRequest
                     {
-                        ["cmd"] = cmd,
-                        ["id"] = id
+                        Command = cmd,
                     }
                 });
                 return id;
@@ -440,7 +413,7 @@ void LoadPlugins()
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{pluginName}")}：{(config.debugmode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{pluginName}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
             GC.SuppressFinalize(es);
         }
     }
@@ -448,22 +421,8 @@ void LoadPlugins()
 }
 
 // 发WS包
-void sendPack(SendData input)
+void sendPack(PacketBase input)
 {
     byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
-    switch (config.encrypt)
-    {
-        case "aes_cbc_pkcs7padding":
-            pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Pack
-            {
-                type = "encrypted",
-                @params = new Pack.ParamsData
-                {
-                    mode = config.encrypt,
-                    raw = Convert.ToBase64String(aes.EncryptCbc(pack, aes.IV))
-                }
-            }));
-            break;
-    }
     ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
 }

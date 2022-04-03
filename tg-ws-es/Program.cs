@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Telegram.Bot;
 
-// 统一控制台输入输出代码页（UTF8），防止乱码
+// 统一控制台代码页为UTF8，防止乱码
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -24,9 +24,9 @@ Config config = new()
     ListenAddr = "127.0.0.1:8080",
     Endpoint = "/ws",
     Token = "",
-    UsingTLS = false,
+    /*UsingTLS = false,
     CertFile = "cert.pem",
-    KeyFile = "key.pem",
+    KeyFile = "key.pem",*/
     BotToken = "YOUR_ACCESS_TOKEN_HERE",
     ProxyAddr = "",
     Language = "zh_Hans",
@@ -166,7 +166,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
 });
 
 // WebSocket监听
-/*Task.Run(() =>
+Task.Run(() =>
 {
     while (true)
     {
@@ -179,29 +179,24 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
-            Data data = JsonSerializer.Deserialize<Data>(packStr);
-            switch (data.cause)
+            PacketBase data = JsonSerializer.Deserialize<PacketBase>(packStr);
+            if (listenerFunc.ContainsKey($"ws.{data.Action}"))
             {
-                case "decodefailed":
-                    throw new CryptographicException($"{data.@params["msg"]}");
-                case "invalidrequest":
-                    throw new InvalidDataException($"{data.@params["msg"]}");
-                default:
-                    if (listenerFunc.ContainsKey($"ws.{data.cause}"))
+                foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"ws.{data.Action}"])
+                {
+                    try
                     {
-                        foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"ws.{data.cause}"])
+                        func.Value(new CallData
                         {
-                            try
-                            {
-                                func.Value(data.@params);
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.cause}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
-                            }
-                        }
+                            id = data.PacketId,
+                            data = data.Params
+                        });
                     }
-                    break;
+                    catch (Exception ex)
+                    {
+                        Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.Action}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -237,7 +232,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
             }
         }
     }
-});*/
+});
 
 // 控制台命令
 while (true)

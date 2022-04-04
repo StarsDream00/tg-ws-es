@@ -136,7 +136,7 @@ LoadPlugins();
 // Telegram监听
 botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
-    if (wsListenerFunc.ContainsKey($"{update.Type}"))
+    if (tgListenerFunc.ContainsKey($"{update.Type}"))
     {
         foreach (KeyValuePair<string, Action<object>> func in tgListenerFunc[$"{update.Type}"])
         {

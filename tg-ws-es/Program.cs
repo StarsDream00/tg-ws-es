@@ -13,7 +13,7 @@ Console.OutputEncoding = Encoding.UTF8;
 Dictionary<string, KeyValuePair<Engine, PluginInfo>> engines = new();
 
 // 监听方法字典
-Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, object>>>>> listenerFunc = new();  // WS用
+Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, object>>>>> wsListenerFunc = new();  // WS用
 Dictionary<string, List<KeyValuePair<string, Action<object>>>> tgListenerFunc = new();  // TG用
 
 // 共享方法字典
@@ -136,9 +136,9 @@ LoadPlugins();
 // Telegram监听
 botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
-    if (listenerFunc.ContainsKey($"{update.Type}"))
+    if (wsListenerFunc.ContainsKey($"{update.Type}"))
     {
-        foreach (KeyValuePair<string, Action<object>> func in tgListenerFunc[$"tg.{update.Type}"])
+        foreach (KeyValuePair<string, Action<object>> func in tgListenerFunc[$"{update.Type}"])
         {
             try
             {
@@ -170,9 +170,9 @@ Task.Run(() =>
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
             PacketBase<Dictionary<string, object>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, object>>>(packStr);
-            if (listenerFunc.ContainsKey(data.Action))
+            if (wsListenerFunc.ContainsKey(data.Action))
             {
-                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in listenerFunc[$"ws.{data.Action}"])
+                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in wsListenerFunc[$"{data.Action}"])
                 {
                     try
                     {
@@ -359,11 +359,11 @@ void LoadPlugins()
             },
             ["listen"] = (string type, Action<long, Dictionary<string, object>> func) =>
             {
-                if (!listenerFunc.ContainsKey(type))
+                if (!wsListenerFunc.ContainsKey(type))
                 {
-                    listenerFunc[type] = new();
+                    wsListenerFunc[type] = new();
                 }
-                listenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, object>>>(pluginName, func));
+                wsListenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, object>>>(pluginName, func));
             }// WIP
         });
         _ = es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
@@ -460,6 +460,6 @@ void UnloadPlugins()
         Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
     }
     engines.Clear();
-    listenerFunc.Clear();
+    wsListenerFunc.Clear();
     exportFunc.Clear();
 }

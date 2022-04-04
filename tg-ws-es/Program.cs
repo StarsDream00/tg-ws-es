@@ -13,7 +13,8 @@ Console.OutputEncoding = Encoding.UTF8;
 Dictionary<string, KeyValuePair<Engine, PluginInfo>> engines = new();
 
 // 监听方法字典
-Dictionary<string, List<KeyValuePair<string, Action<object>>>> listenerFunc = new();
+Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, object>>>>> listenerFunc = new();  // WS用
+Dictionary<string, List<KeyValuePair<string, Action<object>>>> tgListenerFunc = new();  // TG用
 
 // 共享方法字典
 Dictionary<string, object> exportFunc = new();
@@ -52,11 +53,11 @@ catch (Exception ex)
 Dictionary<string, string> language = new()
 {
     ["twe.websocket.connected"] = "已连接到ws://%wsaddr%%endpoint%",
-    ["twe.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重试",
+    ["twe.websocket.connectionfailed"] = "连接ws://%wsaddr%%endpoint%失败，将在5秒后重连",
     ["twe.websocket.connectionretry"] = "连接ws://%wsaddr%%endpoint%断开，将在5秒后重连",
-    ["twe.websocket.receivefailed"] = "接收WS包失败",
+    ["twe.websocket.receivefailed"] = "监听Websocket失败",
     ["twe.telegram.connected"] = "已连接到Telegram服务器",
-    ["twe.telegram.connectionfailed"] = "连接到Telegram服务器失败，将在5秒后重试",
+    ["twe.telegram.connectionfailed"] = "连接到Telegram服务器失败，将在5秒后重连",
     ["twe.telegram.receivefailed"] = "监听Telegram失败",
     ["twe.plugin.loaded"] = "%name%已加载",
     ["twe.plugin.loadfailed"] = "%name%加载失败",
@@ -99,34 +100,7 @@ while (true)
 {
     try
     {
-        ws = new();
-        ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
-        long id = new Random().NextInt64();
-        ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
-        {
-            Action = "LoginRequest",
-            PacketId = id,
-            Params = new LoginRequest
-            {
-                Password = config.Token
-            }
-        })), WebSocketMessageType.Text, true, default).Wait();
-        byte[] buffer = new byte[8192];
-        ws.ReceiveAsync(buffer, default).Wait();
-        string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
-        if (config.DebugMode)
-        {
-            Logger.Trace(packStr, Logger.LogLevel.DEBUG);
-        }
-        PacketBase<LoginResponse> data = JsonSerializer.Deserialize<PacketBase<LoginResponse>>(packStr);
-        if (data.Action == "LoginResponse" && data.PacketId == id && data.Params.Success && data.Params.Message == string.Empty)
-        {
-            Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
-        }
-        else
-        {
-            throw new Exception(data.Params.Message);
-        }
+        WebsocketConnect();
         break;
     }
     catch (Exception ex)
@@ -164,7 +138,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
     if (listenerFunc.ContainsKey($"tg.{update.Type}"))
     {
-        foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"tg.{update.Type}"])
+        foreach (KeyValuePair<string, Action<object>> func in tgListenerFunc[$"tg.{update.Type}"])
         {
             try
             {
@@ -195,18 +169,14 @@ Task.Run(() =>
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
-            PacketBase<object> data = JsonSerializer.Deserialize<PacketBase<object>>(packStr);
+            PacketBase<Dictionary<string, object>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, object>>>(packStr);
             if (listenerFunc.ContainsKey($"ws.{data.Action}"))
             {
-                foreach (KeyValuePair<string, Action<object>> func in listenerFunc[$"ws.{data.Action}"])
+                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in listenerFunc[$"ws.{data.Action}"])
                 {
                     try
                     {
-                        func.Value(new CallData
-                        {
-                            id = data.PacketId,
-                            data = data.Params
-                        });
+                        func.Value(data.PacketId, data.Params);
                     }
                     catch (Exception ex)
                     {
@@ -222,21 +192,12 @@ Task.Run(() =>
                 Logger.Trace($"{language["twe.websocket.receivefailed"]}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
                 return;
             }
-            foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
-            {
-                GC.SuppressFinalize(engine.Value.Key);
-                Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
-            }
-            engines.Clear();
-            listenerFunc.Clear();
-            exportFunc.Clear();
+            UnloadPlugins();
             while (true)
             {
                 try
                 {
-                    ws = new();
-                    ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
-                    Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
+                    WebsocketConnect();
                     LoadPlugins();
                     break;
                 }
@@ -272,14 +233,7 @@ while (true)
         switch (input)
         {
             case "reload":
-                foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
-                {
-                    GC.SuppressFinalize(engine.Value.Key);
-                    Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
-                }
-                engines.Clear();
-                listenerFunc.Clear();
-                exportFunc.Clear();
+                UnloadPlugins();
                 LoadPlugins();
                 break;
             case "list":
@@ -291,6 +245,8 @@ while (true)
                 }
                 break;
             case "stop":
+                UnloadPlugins();
+                ws.CloseAsync(WebSocketCloseStatus.Empty, null, default);
                 Environment.Exit(1);
                 break;
             default:
@@ -325,14 +281,6 @@ void LoadPlugins()
                 pluginName = name;
                 info.introduction = introduction;
                 info.version = version;
-            },
-            ["listen"] = (string type, Action<object> func) =>
-            {
-                if (!listenerFunc.ContainsKey(type))
-                {
-                    listenerFunc[type] = new();
-                }
-                listenerFunc[type].Add(new KeyValuePair<string, Action<object>>(pluginName, func));
             },
             ["log"] = (object message, int? level, int? type, string? path) =>
             {
@@ -386,7 +334,15 @@ void LoadPlugins()
                     }
                 }
             },
-            ["bot"] = botClient.GetMeAsync().Result// WIP
+            ["bot"] = botClient.GetMeAsync().Result,
+            ["listen"] = (string type, Action<object> func) =>
+            {
+                if (!tgListenerFunc.ContainsKey(type))
+                {
+                    tgListenerFunc[type] = new();
+                }
+                tgListenerFunc[type].Add(new KeyValuePair<string, Action<object>>(pluginName, func));
+            }// WIP
         });
         _ = es.SetValue("ws", new Dictionary<string, object>
         {
@@ -400,6 +356,14 @@ void LoadPlugins()
                     Params = @params
                 });
                 return id;
+            },
+            ["listen"] = (string type, Action<long, Dictionary<string, object>> func) =>
+            {
+                if (!listenerFunc.ContainsKey(type))
+                {
+                    listenerFunc[type] = new();
+                }
+                listenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, object>>>(pluginName, func));
             }// WIP
         });
         _ = es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
@@ -417,7 +381,22 @@ void LoadPlugins()
                     }
                 });
                 return id;
-            }// WIP
+            },
+            ["broadcast"] = (string message, int? type) =>
+            {
+                long id = new Random().NextInt64();
+                sendPack(new PacketBase<BroadcastRequest>
+                {
+                    Action = "BroadcastRequest",
+                    PacketId = id,
+                    Params = new BroadcastRequest
+                    {
+                        Message = message,
+                        MessageType = type ?? 0
+                    }
+                });
+                return id;
+            }
         });
         try
         {
@@ -439,4 +418,48 @@ void sendPack(object input)
 {
     byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
     ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
+}
+
+void WebsocketConnect()
+{
+    ws = new();
+    ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
+    long id = new Random().NextInt64();
+    ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
+    {
+        Action = "LoginRequest",
+        PacketId = id,
+        Params = new LoginRequest
+        {
+            Password = config.Token
+        }
+    })), WebSocketMessageType.Text, true, default).Wait();
+    byte[] buffer = new byte[8192];
+    ws.ReceiveAsync(buffer, default).Wait();
+    string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
+    if (config.DebugMode)
+    {
+        Logger.Trace(packStr, Logger.LogLevel.DEBUG);
+    }
+    PacketBase<LoginResponse> data = JsonSerializer.Deserialize<PacketBase<LoginResponse>>(packStr);
+    if (data.Action == "LoginResponse" && data.PacketId == id && data.Params.Success && data.Params.Message == string.Empty)
+    {
+        Logger.Trace(language["twe.websocket.connected"].Replace("%wsaddr%", config.ListenAddr).Replace("%endpoint%", config.Endpoint));
+    }
+    else
+    {
+        throw new Exception(data.Params.Message);
+    }
+}
+
+void UnloadPlugins()
+{
+    foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
+    {
+        GC.SuppressFinalize(engine.Value.Key);
+        Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
+    }
+    engines.Clear();
+    listenerFunc.Clear();
+    exportFunc.Clear();
 }

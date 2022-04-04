@@ -1,31 +1,31 @@
-twe.registerPlugin("Test", "测试用插件", [1, 0, 0]);
+twe.registerPlugin("MessageRelay", "消息转发", [1, 0, 0]);
 
 let chatId = 0; // 填你群组的ChatId
 
 let cache = [];
 let players = [];
-twe.listen("ws.chat", (data) => {
-    tg.sendMessage(chatId, `<${data.sender}> ${data.text}`);
+twe.listen("ws.PlayerChatEvent", (_id, data) => {
+    tg.sendMessage(chatId, `<${data.Player}> ${data.Message}`);
 });
-twe.listen("ws.join", (data) => {
-    players.push(String(data.sender));
+twe.listen("ws.PlayerJoinEvent", (_id, data) => {
+    players.push(String(data.Player));
     tg.sendMessage(
         chatId,
-        `${data.sender} 加入了服务器 当前在线${players.length}人`
+        `${data.Player} 加入了服务器 当前在线${players.length}人`
     );
 });
-twe.listen("ws.left", (data) => {
-    let index = players.indexOf(String(data.sender));
+twe.listen("ws.PlayerLeftEvent", (_id, data) => {
+    let index = players.indexOf(String(data.Player));
     if (index < 0) {
         return;
     }
     players.splice(index, 1);
     tg.sendMessage(
         chatId,
-        `${data.sender} 退出了服务器 当前在线${players.length}人`
+        `${data.Player} 退出了服务器 当前在线${players.length}人`
     );
 });
-twe.listen("ws.mobdie", (data) => {
+/*twe.listen("ws.mobdie", (data) => {
     if (data.mobtype == "minecraft:player") {
         let type = "";
         switch (String(data.dmname)) {
@@ -105,7 +105,7 @@ twe.listen("ws.mobdie", (data) => {
         }
         tg.sendMessage(chatId, `${data.mobname} ${type}`);
     }
-});
+});*/
 twe.listen("tg.Message", (data) => {
     if (data.Message && data.Message.Chat.Id == chatId) {
         if (data.Message.Text.startsWith("/")) {
@@ -114,7 +114,7 @@ twe.listen("tg.Message", (data) => {
                 data.Message.Text == `/list@${tg.bot.Username}`
             ) {
                 cache.push([
-                    mc.runcmd("list"),
+                    // mc.runcmd("list"),
                     (result) => {
                         tg.sendMessage(chatId, result);
                     },
@@ -122,23 +122,23 @@ twe.listen("tg.Message", (data) => {
             }
             return;
         }
-        mc.runcmd(
-            `tellraw @a {"rawtext":[{"text":"<${
+        let date = new Date();
+        let min = date.getMinutes();
+        mc.broadcast(
+            `${date.getHours()}:${min < 10 ? 0 : ""}${min} <${
                 data.Message.SenderChat
                     ? data.Message.SenderChat.Title
                     : data.Message.From.FirstName
                     ? data.Message.From.FirstName + data.Message.From.LastName
                     : data.Message.From.LastName
-            }> ${
-                data.Message.Type == 1 ? data.Message.Text : "§o*胡言乱语*"
-            }"}]}`
+            }> ${data.Message.Type == 1 ? data.Message.Text : "§o*胡言乱语*"}`
         );
     }
 });
-twe.listen("ws.runcmdfeedback", (data) => {
+twe.listen("ws.RuncmdResponse", (id, data) => {
     cache.forEach((task) => {
-        if (data.id == task[0]) {
-            task[1](data.result);
+        if (id == task[0]) {
+            task[1](data.Message);
             cache.splice(cache.indexOf(task), 1);
         }
     });

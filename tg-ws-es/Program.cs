@@ -172,7 +172,7 @@ Task.Run(() =>
             PacketBase<Dictionary<string, object>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, object>>>(packStr);
             if (wsListenerFunc.ContainsKey(data.Action))
             {
-                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in wsListenerFunc[$"{data.Action}"])
+                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in wsListenerFunc[data.Action])
                 {
                     try
                     {

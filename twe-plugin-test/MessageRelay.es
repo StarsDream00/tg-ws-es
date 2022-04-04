@@ -4,17 +4,17 @@ let chatId = 0; // 填你群组的ChatId
 
 let cache = [];
 let players = [];
-twe.listen("ws.PlayerChatEvent", (_id, data) => {
+ws.listen("PlayerChatEvent", (_id, data) => {
     tg.sendMessage(chatId, `<${data.Player}> ${data.Message}`);
 });
-twe.listen("ws.PlayerJoinEvent", (_id, data) => {
+ws.listen("PlayerJoinEvent", (_id, data) => {
     players.push(String(data.Player));
     tg.sendMessage(
         chatId,
         `${data.Player} 加入了服务器 当前在线${players.length}人`
     );
 });
-twe.listen("ws.PlayerLeftEvent", (_id, data) => {
+ws.listen("PlayerLeftEvent", (_id, data) => {
     let index = players.indexOf(String(data.Player));
     if (index < 0) {
         return;
@@ -25,7 +25,7 @@ twe.listen("ws.PlayerLeftEvent", (_id, data) => {
         `${data.Player} 退出了服务器 当前在线${players.length}人`
     );
 });
-/*twe.listen("ws.mobdie", (data) => {
+/*ws.listen("mobdie", (_id, data) => {
     if (data.mobtype == "minecraft:player") {
         let type = "";
         switch (String(data.dmname)) {
@@ -106,7 +106,7 @@ twe.listen("ws.PlayerLeftEvent", (_id, data) => {
         tg.sendMessage(chatId, `${data.mobname} ${type}`);
     }
 });*/
-twe.listen("tg.Message", (data) => {
+tg.listen("Message", (data) => {
     if (data.Message && data.Message.Chat.Id == chatId) {
         if (data.Message.Text.startsWith("/")) {
             if (
@@ -135,7 +135,7 @@ twe.listen("tg.Message", (data) => {
         );
     }
 });
-twe.listen("ws.RuncmdResponse", (id, data) => {
+ws.listen("RuncmdResponse", (id, data) => {
     cache.forEach((task) => {
         if (id == task[0]) {
             task[1](data.Message);

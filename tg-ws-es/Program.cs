@@ -28,7 +28,7 @@ Config config = new()
     /*UsingTLS = false,
     CertFile = "cert.pem",
     KeyFile = "key.pem",*/
-    BotToken = "YOUR_ACCESS_TOKEN_HERE",
+    BotToken = "",
     ProxyAddr = "",
     Language = "zh_Hans",
     DebugMode = false
@@ -136,7 +136,7 @@ LoadPlugins();
 // Telegram监听
 botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
-    if (listenerFunc.ContainsKey($"tg.{update.Type}"))
+    if (listenerFunc.ContainsKey($"{update.Type}"))
     {
         foreach (KeyValuePair<string, Action<object>> func in tgListenerFunc[$"tg.{update.Type}"])
         {
@@ -170,7 +170,7 @@ Task.Run(() =>
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
             PacketBase<Dictionary<string, object>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, object>>>(packStr);
-            if (listenerFunc.ContainsKey($"ws.{data.Action}"))
+            if (listenerFunc.ContainsKey(data.Action))
             {
                 foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in listenerFunc[$"ws.{data.Action}"])
                 {

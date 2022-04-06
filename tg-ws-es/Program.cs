@@ -11,16 +11,17 @@ using File = System.IO.File;
 // 统一控制台代码页为UTF8，防止乱码
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = Encoding.UTF8;
+Console.ResetColor();
 
 // ES引擎字典
 Dictionary<string, KeyValuePair<Engine, PluginInfo>> engines = new();
 
 // 监听方法字典
-Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, dynamic>>>>> wsListenerFunc = new();  // WS用
+Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, object>>>>> wsListenerFunc = new();  // WS用
 Dictionary<string, List<KeyValuePair<string, Action<Update>>>> tgListenerFunc = new();  // TG用
 
 // 共享方法字典
-Dictionary<string, dynamic> exportFunc = new();
+Dictionary<string, object> exportFunc = new();
 
 // 配置文件
 Config config = new()
@@ -172,10 +173,10 @@ Task.Run(() =>
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
-            PacketBase<Dictionary<string, dynamic>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, dynamic>>>(packStr);
+            PacketBase<Dictionary<string, object>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, object>>>(packStr);
             if (wsListenerFunc.ContainsKey(data.Action))
             {
-                foreach (KeyValuePair<string, Action<long, Dictionary<string, dynamic>>> func in wsListenerFunc[data.Action])
+                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in wsListenerFunc[data.Action])
                 {
                     try
                     {
@@ -285,11 +286,11 @@ void LoadPlugins()
                 info.introduction = introduction;
                 info.version = version;
             },
-            ["log"] = (dynamic message, int? level, int? type, string? path) =>
+            ["log"] = (string message, int? level, int? type, string? path) =>
             {
                 Logger.Trace(message, level == null ? Logger.LogLevel.INFO : (Logger.LogLevel)level, type == null ? Logger.LogType.OnlyConsole : (Logger.LogType)type, path);
             },
-            ["export"] = (dynamic func, string name) =>
+            ["export"] = (object func, string name) =>
             {
                 try
                 {
@@ -354,7 +355,7 @@ void LoadPlugins()
                 }
             },
             ["bot"] = botClient.GetMeAsync().Result,
-            ["listen"] = (string type, Action<dynamic> func) =>
+            ["listen"] = (string type, Action<Update> func) =>
             {
                 if (!tgListenerFunc.ContainsKey(type))
                 {
@@ -365,10 +366,10 @@ void LoadPlugins()
         });
         _ = es.SetValue("ws", new Dictionary<string, object>
         {
-            ["sendPack"] = (string action, Dictionary<string, dynamic> @params) =>
+            ["sendPack"] = (string action, Dictionary<string, object> @params) =>
             {
                 long id = new Random().NextInt64();
-                sendPack(new PacketBase<dynamic>
+                sendPack(new PacketBase<Dictionary<string, object>>
                 {
                     Action = action,
                     PacketId = id,
@@ -376,13 +377,13 @@ void LoadPlugins()
                 });
                 return id;
             },
-            ["listen"] = (string type, Action<long, Dictionary<string, dynamic>> func) =>
+            ["listen"] = (string type, Action<long, Dictionary<string, object>> func) =>
             {
                 if (!wsListenerFunc.ContainsKey(type))
                 {
                     wsListenerFunc[type] = new();
                 }
-                wsListenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, dynamic>>>(pluginName, func));
+                wsListenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, object>>>(pluginName, func));
             }// WIP
         });
         _ = es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
@@ -433,7 +434,7 @@ void LoadPlugins()
 }
 
 // 发WS包
-void sendPack(dynamic input)
+void sendPack(object input)
 {
     byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
     ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();

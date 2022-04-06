@@ -17,7 +17,7 @@ public class Logger
         OnlyLogFile = 1,
         ConsoleWithLogFile = 2
     }
-    public static void Trace(dynamic message, LogLevel logLevel = LogLevel.INFO, LogType logType = LogType.OnlyConsole, dynamic? logFilePath = null)
+    public static void Trace(object message, LogLevel logLevel = LogLevel.INFO, LogType logType = LogType.OnlyConsole, string? logFilePath = null)
     {
         string methodName = new StackTrace().GetFrame(1)?.GetMethod()?.Name ?? string.Empty;
         string assemblyName = Assembly.GetCallingAssembly().GetName().Name ?? string.Empty;
@@ -25,6 +25,9 @@ public class Logger
         {
             switch (logLevel)
             {
+                case LogLevel.INFO:
+                    Console.ForegroundColor = ConsoleColor.White;
+                    break;
                 case LogLevel.WARN:
                     Console.ForegroundColor = ConsoleColor.Yellow;
                     break;
@@ -35,12 +38,13 @@ public class Logger
                     Console.ForegroundColor = ConsoleColor.Blue;
                     break;
             }
+            Console.BackgroundColor = ConsoleColor.Black;
             Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss:fff} {logLevel}] [{assemblyName} - {methodName}] {message}");
             Console.ResetColor();
         }
         if (logType != LogType.OnlyConsole)
         {
-            string path = string.IsNullOrWhiteSpace(logFilePath) ? $"logs\\{DateTime.Now:yyyy-MM-dd}.log" : logFilePath ?? "";
+            string path = string.IsNullOrWhiteSpace(logFilePath) ? $"logs\\{DateTime.Now:yyyy-MM-dd}.log" : logFilePath;
             _ = Directory.CreateDirectory(Path.GetDirectoryName(path) ?? string.Empty);
             File.AppendAllLines(path, new[] { $"[{DateTime.Now} {logLevel}] [{assemblyName} - {methodName}] {message}" });
         }

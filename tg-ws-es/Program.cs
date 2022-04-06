@@ -4,6 +4,9 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
+using Telegram.Bot.Types;
+using File = System.IO.File;
 
 // 统一控制台代码页为UTF8，防止乱码
 Console.InputEncoding = Encoding.UTF8;
@@ -13,11 +16,11 @@ Console.OutputEncoding = Encoding.UTF8;
 Dictionary<string, KeyValuePair<Engine, PluginInfo>> engines = new();
 
 // 监听方法字典
-Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, object>>>>> wsListenerFunc = new();  // WS用
-Dictionary<string, List<KeyValuePair<string, Action<object>>>> tgListenerFunc = new();  // TG用
+Dictionary<string, List<KeyValuePair<string, Action<long, Dictionary<string, dynamic>>>>> wsListenerFunc = new();  // WS用
+Dictionary<string, List<KeyValuePair<string, Action<Update>>>> tgListenerFunc = new();  // TG用
 
 // 共享方法字典
-Dictionary<string, object> exportFunc = new();
+Dictionary<string, dynamic> exportFunc = new();
 
 // 配置文件
 Config config = new()
@@ -138,7 +141,7 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
 {
     if (tgListenerFunc.ContainsKey($"{update.Type}"))
     {
-        foreach (KeyValuePair<string, Action<object>> func in tgListenerFunc[$"{update.Type}"])
+        foreach (KeyValuePair<string, Action<Update>> func in tgListenerFunc[$"{update.Type}"])
         {
             try
             {
@@ -169,10 +172,10 @@ Task.Run(() =>
             {
                 Logger.Trace(packStr, Logger.LogLevel.DEBUG);
             }
-            PacketBase<Dictionary<string, object>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, object>>>(packStr);
+            PacketBase<Dictionary<string, dynamic>> data = JsonSerializer.Deserialize<PacketBase<Dictionary<string, dynamic>>>(packStr);
             if (wsListenerFunc.ContainsKey(data.Action))
             {
-                foreach (KeyValuePair<string, Action<long, Dictionary<string, object>>> func in wsListenerFunc[data.Action])
+                foreach (KeyValuePair<string, Action<long, Dictionary<string, dynamic>>> func in wsListenerFunc[data.Action])
                 {
                     try
                     {
@@ -246,7 +249,7 @@ while (true)
                 break;
             case "stop":
                 UnloadPlugins();
-                ws.CloseAsync(WebSocketCloseStatus.Empty, null, default);
+                _ = ws.CloseAsync(WebSocketCloseStatus.Empty, null, default);
                 Environment.Exit(1);
                 break;
             default:
@@ -282,11 +285,11 @@ void LoadPlugins()
                 info.introduction = introduction;
                 info.version = version;
             },
-            ["log"] = (object message, int? level, int? type, string? path) =>
+            ["log"] = (dynamic message, int? level, int? type, string? path) =>
             {
                 Logger.Trace(message, level == null ? Logger.LogLevel.INFO : (Logger.LogLevel)level, type == null ? Logger.LogType.OnlyConsole : (Logger.LogType)type, path);
             },
-            ["export"] = (object func, string name) =>
+            ["export"] = (dynamic func, string name) =>
             {
                 try
                 {
@@ -328,6 +331,22 @@ void LoadPlugins()
                         botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type).Wait();
                         break;
                     }
+                    catch (AggregateException ex)
+                    {
+                        bool br = false;
+                        foreach (Exception t in ex.InnerExceptions)
+                        {
+                            if (t.GetType() == typeof(ApiRequestException))
+                            {
+                                br = true;
+                            }
+                            Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? t : t.Message)}", Logger.LogLevel.WARN);
+                        }
+                        if (br)
+                        {
+                            break;
+                        }
+                    }
                     catch (Exception ex)
                     {
                         Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
@@ -335,21 +354,21 @@ void LoadPlugins()
                 }
             },
             ["bot"] = botClient.GetMeAsync().Result,
-            ["listen"] = (string type, Action<object> func) =>
+            ["listen"] = (string type, Action<dynamic> func) =>
             {
                 if (!tgListenerFunc.ContainsKey(type))
                 {
                     tgListenerFunc[type] = new();
                 }
-                tgListenerFunc[type].Add(new KeyValuePair<string, Action<object>>(pluginName, func));
+                tgListenerFunc[type].Add(new KeyValuePair<string, Action<Update>>(pluginName, func));
             }// WIP
         });
         _ = es.SetValue("ws", new Dictionary<string, object>
         {
-            ["sendPack"] = (string action, Dictionary<string, object> @params) =>
+            ["sendPack"] = (string action, Dictionary<string, dynamic> @params) =>
             {
                 long id = new Random().NextInt64();
-                sendPack(new PacketBase<object>
+                sendPack(new PacketBase<dynamic>
                 {
                     Action = action,
                     PacketId = id,
@@ -357,13 +376,13 @@ void LoadPlugins()
                 });
                 return id;
             },
-            ["listen"] = (string type, Action<long, Dictionary<string, object>> func) =>
+            ["listen"] = (string type, Action<long, Dictionary<string, dynamic>> func) =>
             {
                 if (!wsListenerFunc.ContainsKey(type))
                 {
                     wsListenerFunc[type] = new();
                 }
-                wsListenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, object>>>(pluginName, func));
+                wsListenerFunc[type].Add(new KeyValuePair<string, Action<long, Dictionary<string, dynamic>>>(pluginName, func));
             }// WIP
         });
         _ = es.SetValue("mc", new Dictionary<string, object>    // 为MC准备的方便API
@@ -414,7 +433,7 @@ void LoadPlugins()
 }
 
 // 发WS包
-void sendPack(object input)
+void sendPack(dynamic input)
 {
     byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
     ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();

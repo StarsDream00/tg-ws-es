@@ -481,5 +481,6 @@ void UnloadPlugins()
     }
     engines.Clear();
     wsListenerFunc.Clear();
+    tgListenerFunc.Clear();
     exportFunc.Clear();
 }

@@ -108,7 +108,7 @@ ws.listen("PlayerLeftEvent", (_id, data) => {
 });*/
 tg.listen("Message", (data) => {
     if (data.Message && data.Message.Chat.Id == chatId) {
-        if (data.Message.Text.startsWith("/")) {
+        if (data.Message.Type == 1 && data.Message.Text.startsWith("/")) {
             if (
                 data.Message.Text == "/list" ||
                 data.Message.Text == `/list@${tg.bot.Username}`

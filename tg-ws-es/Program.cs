@@ -1,4 +1,5 @@
 ﻿using Jint;
+using Jint.Runtime;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
@@ -71,6 +72,7 @@ Dictionary<string, string> language = new()
     ["twe.plugin.apierror"] = "%name%抛出了异常",
     ["twe.plugin.listenerror"] = "%name%监听（插件%plugin%）抛出了异常",
     ["twe.plugin.list"] = "插件列表",
+    ["twe.es.error"] = "%message%（位于%line%：%column%）",
     ["twe.command.doesntexist"] = "不存在的命令"
 };
 if (!Directory.Exists("language"))
@@ -423,6 +425,11 @@ void LoadPlugins()
             _ = es.Execute(File.ReadAllText(file.FullName));
             engines.Add(pluginName, new KeyValuePair<Engine, PluginInfo>(es, info));
             Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", $"{pluginName}"));
+        }
+        catch (JavaScriptException ex)
+        {
+            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{pluginName}")}：{language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{ex.LineNumber}").Replace("%column%", $"{ex.Column}")}", Logger.LogLevel.WARN);
+            GC.SuppressFinalize(es);
         }
         catch (Exception ex)
         {

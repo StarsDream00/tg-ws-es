@@ -150,6 +150,10 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
             {
                 func.Value(update);
             }
+            catch (JavaScriptException ex)
+            {
+                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{ex.LineNumber}").Replace("%column%", $"{ex.Column}")}", Logger.LogLevel.WARN);
+            }
             catch (Exception ex)
             {
                 Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
@@ -183,6 +187,10 @@ Task.Run(() =>
                     try
                     {
                         func.Value(data.PacketId, data.Params);
+                    }
+                    catch (JavaScriptException ex)
+                    {
+                        Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.Action}").Replace("%plugin%", func.Key)}：{language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{ex.LineNumber}").Replace("%column%", $"{ex.Column}")}", Logger.LogLevel.WARN);
                     }
                     catch (Exception ex)
                     {

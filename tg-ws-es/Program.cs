@@ -126,7 +126,7 @@ while (true)
         {
             Proxy = new WebProxy(config.ProxyAddr, true)
         }));
-        botClient.TestApiAsync().Wait();
+        await botClient.TestApiAsync();
         Logger.Trace(language["twe.telegram.connected"]);
         break;
     }
@@ -150,13 +150,9 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
             {
                 func.Value(update);
             }
-            catch (JavaScriptException ex)
-            {
-                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{ex.LineNumber}").Replace("%column%", $"{ex.Column}")}", Logger.LogLevel.WARN);
-            }
             catch (Exception ex)
             {
-                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"tg.{update.Type}").Replace("%plugin%", func.Key)}：{(ex.GetType() == typeof(JavaScriptException) ? language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{((JavaScriptException)ex).LineNumber}").Replace("%column%", $"{((JavaScriptException)ex).Column}") : (config.DebugMode ? ex : ex.Message))}", Logger.LogLevel.ERROR);
             }
         }
     }
@@ -166,14 +162,14 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
 });
 
 // WebSocket监听
-Task.Run(() =>
+await Task.Run(async () =>
 {
     while (true)
     {
         byte[] buffer = new byte[8192];
         try
         {
-            ws.ReceiveAsync(buffer, default).Wait();
+            await ws.ReceiveAsync(buffer, default);
             string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
             if (config.DebugMode)
             {
@@ -188,13 +184,9 @@ Task.Run(() =>
                     {
                         func.Value(data.PacketId, data.Params);
                     }
-                    catch (JavaScriptException ex)
-                    {
-                        Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.Action}").Replace("%plugin%", func.Key)}：{language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{ex.LineNumber}").Replace("%column%", $"{ex.Column}")}", Logger.LogLevel.WARN);
-                    }
                     catch (Exception ex)
                     {
-                        Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.Action}").Replace("%plugin%", func.Key)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
+                        Logger.Trace($"{language["twe.plugin.listenerror"].Replace("%name%", $"ws.{data.Action}").Replace("%plugin%", func.Key)}：{(ex.GetType() == typeof(JavaScriptException) ? language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{((JavaScriptException)ex).LineNumber}").Replace("%column%", $"{((JavaScriptException)ex).Column}") : (config.DebugMode ? ex : ex.Message))}", Logger.LogLevel.ERROR);
                     }
                 }
             }
@@ -204,7 +196,7 @@ Task.Run(() =>
             if (ws.State == WebSocketState.Open)
             {
                 Logger.Trace($"{language["twe.websocket.receivefailed"]}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.ERROR);
-                return;
+                continue;
             }
             UnloadPlugins();
             while (true)
@@ -235,11 +227,11 @@ while (true)
         {
             GC.SuppressFinalize(engines[input[7..]]);
             _ = engines.Remove(input[7..]);
-            Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{input[7..]}"));
+            Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", input[7..]));
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", $"{input[7..]}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.unloadfailed"].Replace("%name%", input[7..])}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
         }
     }
     else
@@ -308,7 +300,7 @@ void LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", file.Name)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["import"] = (string name) =>
@@ -319,7 +311,7 @@ void LoadPlugins()
                 }
                 catch (Exception ex)
                 {
-                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                    Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", file.Name)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
                 }
             },
             ["listPlugins"] = () =>
@@ -333,13 +325,13 @@ void LoadPlugins()
         });
         _ = es.SetValue("tg", new Dictionary<string, object>
         {
-            ["sendMessage"] = (long chatid, string msg, int? type) =>
+            ["sendMessage"] = async (long chatid, string msg, int? type) =>
             {
                 while (true)
                 {
                     try
                     {
-                        botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type).Wait();
+                        await botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type);
                         break;
                     }
                     catch (AggregateException ex)
@@ -351,7 +343,7 @@ void LoadPlugins()
                             {
                                 br = true;
                             }
-                            Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? t : t.Message)}", Logger.LogLevel.WARN);
+                            Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", file.Name)}：{(config.DebugMode ? t : t.Message)}", Logger.LogLevel.WARN);
                         }
                         if (br)
                         {
@@ -360,7 +352,11 @@ void LoadPlugins()
                     }
                     catch (Exception ex)
                     {
-                        Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", $"{file.Name}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                        Logger.Trace($"{language["twe.plugin.apierror"].Replace("%name%", file.Name)}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+                        if (ex.GetType() == typeof(ApiRequestException))
+                        {
+                            break;
+                        }
                     }
                 }
             },
@@ -410,22 +406,7 @@ void LoadPlugins()
                         Command = cmd,
                     }
                 });
-                byte[] buffer = new byte[8192];
-                ws.ReceiveAsync(buffer, default).Wait();
-                string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
-                if (config.DebugMode)
-                {
-                    Logger.Trace(packStr, Logger.LogLevel.DEBUG);
-                }
-                PacketBase<RuncmdResponse> data = JsonSerializer.Deserialize<PacketBase<RuncmdResponse>>(packStr);
-                if (data.Action == "RuncmdResponse" && data.PacketId == id)
-                {
-                    return data.Params.Message;
-                }
-                else
-                {
-                    return null;
-                }
+                return id;
             },
             ["broadcast"] = (string message, int? type) =>
             {
@@ -440,22 +421,18 @@ void LoadPlugins()
                         MessageType = type ?? 0
                     }
                 });
+                return id;
             }
         });
         try
         {
             _ = es.Execute(File.ReadAllText(file.FullName));
             engines.Add(pluginName, new KeyValuePair<Engine, PluginInfo>(es, info));
-            Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", $"{pluginName}"));
-        }
-        catch (JavaScriptException ex)
-        {
-            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{pluginName}")}：{language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{ex.LineNumber}").Replace("%column%", $"{ex.Column}")}", Logger.LogLevel.WARN);
-            GC.SuppressFinalize(es);
+            Logger.Trace(language["twe.plugin.loaded"].Replace("%name%", pluginName));
         }
         catch (Exception ex)
         {
-            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", $"{pluginName}")}：{(config.DebugMode ? ex : ex.Message)}", Logger.LogLevel.WARN);
+            Logger.Trace($"{language["twe.plugin.loadfailed"].Replace("%name%", pluginName)}：{(ex.GetType() == typeof(JavaScriptException) ? language["twe.es.error"].Replace("%message%", config.DebugMode ? $"{ex}" : ex.Message).Replace("%line%", $"{((JavaScriptException)ex).LineNumber}").Replace("%column%", $"{((JavaScriptException)ex).Column}") : (config.DebugMode ? ex : ex.Message))}", Logger.LogLevel.WARN);
             GC.SuppressFinalize(es);
         }
     }
@@ -463,18 +440,19 @@ void LoadPlugins()
 }
 
 // 发WS包
-void sendPack(object input)
+async void sendPack(object input)
 {
-    byte[] pack = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input));
-    ws.SendAsync(pack, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
+    string packStr = JsonSerializer.Serialize(input);
+    Logger.Trace(packStr, Logger.LogLevel.DEBUG);
+    await ws.SendAsync(Encoding.UTF8.GetBytes(packStr), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask();
 }
 
-void WebsocketConnect()
+async void WebsocketConnect()
 {
     ws = new();
-    ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
+    await ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default);
     long id = new Random().NextInt64();
-    ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
+    await ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
     {
         Action = "LoginRequest",
         PacketId = id,
@@ -482,9 +460,9 @@ void WebsocketConnect()
         {
             Password = config.Token
         }
-    })), WebSocketMessageType.Text, true, default).Wait();
+    })), WebSocketMessageType.Text, true, default);
     byte[] buffer = new byte[8192];
-    ws.ReceiveAsync(buffer, default).Wait();
+    await ws.ReceiveAsync(buffer, default);
     string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
     if (config.DebugMode)
     {
@@ -506,7 +484,7 @@ void UnloadPlugins()
     foreach (KeyValuePair<string, KeyValuePair<Engine, PluginInfo>> engine in engines)
     {
         GC.SuppressFinalize(engine.Value.Key);
-        Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", $"{engine.Key}"));
+        Logger.Trace(language["twe.plugin.unloaded"].Replace("%name%", engine.Key));
     }
     engines.Clear();
     wsListenerFunc.Clear();

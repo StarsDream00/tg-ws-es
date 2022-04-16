@@ -126,7 +126,7 @@ while (true)
         {
             Proxy = new WebProxy(config.ProxyAddr, true)
         }));
-        await botClient.TestApiAsync();
+        botClient.TestApiAsync().Wait();
         Logger.Trace(language["twe.telegram.connected"]);
         break;
     }
@@ -162,14 +162,14 @@ botClient.StartReceiving((botClient1, update, cancellationToken) =>
 });
 
 // WebSocket监听
-await Task.Run(async () =>
+Task.Run(() =>
 {
     while (true)
     {
         byte[] buffer = new byte[8192];
         try
         {
-            await ws.ReceiveAsync(buffer, default);
+            ws.ReceiveAsync(buffer, default).Wait();
             string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
             if (config.DebugMode)
             {
@@ -325,13 +325,13 @@ void LoadPlugins()
         });
         _ = es.SetValue("tg", new Dictionary<string, object>
         {
-            ["sendMessage"] = async (long chatid, string msg, int? type) =>
+            ["sendMessage"] = (long chatid, string msg, int? type) =>
             {
                 while (true)
                 {
                     try
                     {
-                        await botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type);
+                        botClient.SendTextMessageAsync(chatid, msg, (Telegram.Bot.Types.Enums.ParseMode?)type).Wait();
                         break;
                     }
                     catch (AggregateException ex)
@@ -440,19 +440,19 @@ void LoadPlugins()
 }
 
 // 发WS包
-async void sendPack(object input)
+void sendPack(object input)
 {
     string packStr = JsonSerializer.Serialize(input);
     Logger.Trace(packStr, Logger.LogLevel.DEBUG);
-    await ws.SendAsync(Encoding.UTF8.GetBytes(packStr), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask();
+    ws.SendAsync(Encoding.UTF8.GetBytes(packStr), WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, default).AsTask().Wait();
 }
 
-async void WebsocketConnect()
+void WebsocketConnect()
 {
     ws = new();
-    await ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default);
+    ws.ConnectAsync(new Uri($"ws://{config.ListenAddr}{config.Endpoint}"), default).Wait();
     long id = new Random().NextInt64();
-    await ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
+    ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new PacketBase<LoginRequest>
     {
         Action = "LoginRequest",
         PacketId = id,
@@ -460,9 +460,9 @@ async void WebsocketConnect()
         {
             Password = config.Token
         }
-    })), WebSocketMessageType.Text, true, default);
+    })), WebSocketMessageType.Text, true, default).Wait();
     byte[] buffer = new byte[8192];
-    await ws.ReceiveAsync(buffer, default);
+    ws.ReceiveAsync(buffer, default).Wait();
     string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
     if (config.DebugMode)
     {

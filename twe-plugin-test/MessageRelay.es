@@ -114,7 +114,7 @@ tg.listen("Message", (data) => {
                 data.Message.Text == `/list@${tg.bot.Username}`
             ) {
                 cache.push([
-                    // mc.runcmd("list"),
+                    mc.runcmd("list"),
                     (result) => {
                         tg.sendMessage(chatId, result);
                     },

@@ -2,8 +2,8 @@
 {
     public string ListenAddr { get; set; }
     public string Endpoint { get; set; }
-    public string Token { get; set; }
-    /*public bool UsingTLS { get; set; }
+    public string Token { get; set; }/*
+    public bool UsingTLS { get; set; }
     public string CertFile { get; set; }
     public string KeyFile { get; set; }*/
     public string BotToken { get; set; }

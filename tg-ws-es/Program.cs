@@ -29,8 +29,8 @@ Config config = new()
 {
     ListenAddr = "127.0.0.1:8080",
     Endpoint = "/ws",
-    Token = "",
-    /*UsingTLS = false,
+    Token = "",/*
+    UsingTLS = false,
     CertFile = "cert.pem",
     KeyFile = "key.pem",*/
     BotToken = "",
@@ -410,7 +410,22 @@ void LoadPlugins()
                         Command = cmd,
                     }
                 });
-                return id;
+                byte[] buffer = new byte[8192];
+                ws.ReceiveAsync(buffer, default).Wait();
+                string packStr = Encoding.UTF8.GetString(buffer).Replace("\0", string.Empty);
+                if (config.DebugMode)
+                {
+                    Logger.Trace(packStr, Logger.LogLevel.DEBUG);
+                }
+                PacketBase<RuncmdResponse> data = JsonSerializer.Deserialize<PacketBase<RuncmdResponse>>(packStr);
+                if (data.Action == "RuncmdResponse" && data.PacketId == id)
+                {
+                    return data.Params.Message;
+                }
+                else
+                {
+                    return null;
+                }
             },
             ["broadcast"] = (string message, int? type) =>
             {
@@ -425,7 +440,6 @@ void LoadPlugins()
                         MessageType = type ?? 0
                     }
                 });
-                return id;
             }
         });
         try
